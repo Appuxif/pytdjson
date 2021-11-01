@@ -2,6 +2,14 @@
 
 Библиотека для работы с Телеграм. Для конкуррентности используется asyncio.
 
+## Install
+
+> pip install https://github.com/Appuxif/pytdjson/archive/master.zip  
+
+or  
+
+> pip install git+https://github.com/Appuxif/pytdjson/
+
 ## Example
 
 Простейший пример

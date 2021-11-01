@@ -9,6 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 def _get_tdjson_lib_path() -> str:
+    # import platform
+    # if platform.system().lower() == 'darwin':
+    #     lib_name = 'darwin/libtdjson.dylib'
+    # else:
+    #     lib_name = 'linux/libtdjson.so'
     lib_name = 'linux/libtdjson.so'
 
     return pkg_resources.resource_filename('telegram', f'lib/{lib_name}')

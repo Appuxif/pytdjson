@@ -1,3 +1,4 @@
+import os
 from typing import TYPE_CHECKING
 
 from .types.message import TextParseModeTypes
@@ -6,21 +7,129 @@ if TYPE_CHECKING:
     from .client import AsyncTelegram
 
 
-class API:
-    """API хелпер для телеграм клиента"""
+class BaseAPI:
+    """Базовый класс API хелпера для телеграм клиента"""
 
     def __init__(self, client: 'AsyncTelegram'):
         self.client = client
 
-    def send_data(self, method, **kwargs):
+    def send_data(self, method, request_id=None, **kwargs):
         """Асинхронный вызов метода"""
         kwargs['@type'] = method
-        return self.client.send_data(kwargs)
+        return self.client.send_data(kwargs, request_id=request_id)
 
-    def send_data_sync(self, method, **kwargs):
+    def send_data_sync(self, method, request_id=None, **kwargs):
         """Синхронный вызов метода"""
         kwargs['@type'] = method
-        return self.client.send_data_sync(kwargs)
+        return self.client.send_data_sync(kwargs, request_id=request_id)
+
+
+class AuthAPI(BaseAPI):
+    """
+    API хелпер, который используется только в момента
+    аутентификации клиента в телеграм
+    """
+
+    def get_authorization_state(self):
+        return self.send_data(
+            'getAuthorizationState',
+            request_id='getAuthorizationState',
+        )
+
+    def set_tdlib_parameters(self):
+        parameters = {
+            "use_test_dc": self.client.settings.use_test_dc,
+            "api_id": self.client.settings.api_id,
+            "api_hash": self.client.settings.api_hash,
+            "device_model": self.client.settings.device_model,
+            "system_version": self.client.settings.system_version,
+            "application_version": self.client.settings.application_version,
+            "system_language_code": self.client.settings.system_language_code,
+            "database_directory": os.path.join(
+                self.client.settings.files_directory, "database"
+            ),
+            "use_message_database": self.client.settings.use_message_database,
+            "files_directory": os.path.join(
+                self.client.settings.files_directory, "files"
+            ),
+        }
+        return self.send_data(
+            'setTdlibParameters',
+            parameters=parameters,
+            request_id='updateAuthorizationState',
+        )
+
+    def check_database_encryption_key(self):
+        return self.send_data(
+            'checkDatabaseEncryptionKey',
+            encryption_key=self.client.settings.database_encryption_key,
+            request_id='updateAuthorizationState',
+        )
+
+    def set_authentication_phone_number(self):
+        phone = self.client.settings.phone
+
+        if not phone:
+            raise ValueError('phone not set')
+
+        return self.send_data(
+            'setAuthenticationPhoneNumber',
+            phone_number=phone,
+            allow_flash_call=False,
+            is_current_phone_number=True,
+            request_id='updateAuthorizationState',
+        )
+
+    def check_authentication_bot_token(self):
+        token = self.client.settings.bot_token
+
+        if not token:
+            raise ValueError('token not set')
+
+        return self.send_data(
+            'checkAuthenticationBotToken',
+            token=token,
+            request_id='updateAuthorizationState',
+        )
+
+    def check_authentication_code(self, auth_code=None):
+        """Запрос для проверки кода авторизации"""
+        return self.send_data(
+            'checkAuthenticationCode',
+            code=str(auth_code),
+            request_id='updateAuthorizationState',
+        )
+
+    def register_user(self):
+        """Запрос на регистрацию нового пользователя"""
+        first_name = self.client.settings.first_name
+        last_name = self.client.settings.last_name
+
+        if not first_name:
+            raise ValueError('first name not set')
+
+        return self.send_data(
+            'registerUser',
+            first_name=str(first_name),
+            last_name=str(last_name or ''),
+            request_id='updateAuthorizationState',
+        )
+
+    def check_authentication_password(self):
+        password = self.client.settings.password
+
+        if not password:
+            raise ValueError('password not set')
+
+        return self.send_data(
+            'checkAuthenticationPassword',
+            password=password,
+            request_id='updateAuthorizationState',
+        )
+
+
+class API(BaseAPI):
+    """API хелпер для телеграм клиента"""
 
     def get_me(self):
         """Запрашивает личные данные клиента"""

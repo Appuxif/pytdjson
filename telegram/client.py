@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import signal
 from collections import defaultdict
 from dataclasses import dataclass
@@ -9,7 +8,7 @@ from typing import Any, Callable, DefaultDict, Dict, List, Optional
 from uuid import uuid4
 
 from . import VERSION
-from .api import API
+from .api import API, AuthAPI
 from .tdjson import TDJson
 from .utils import Result
 
@@ -30,7 +29,6 @@ class Settings:
     password: Optional[str] = None
     bot_token: Optional[str] = None
     library_path: Optional[str] = None
-    # worker: Optional[Type[BaseWorker]] = None
     files_directory: Optional[str] = None
     use_test_dc: bool = False
     use_message_database: bool = True
@@ -38,7 +36,6 @@ class Settings:
     application_version: str = VERSION
     system_version: str = 'unknown'
     system_language_code: str = 'en'
-    login: bool = False
     default_workers_queue_size: int = 1000
     tdlib_verbosity: int = 2
     first_name: str = ''
@@ -50,12 +47,6 @@ class Settings:
             raise ValueError('You must provide bot_token or phone')
 
 
-class Authorisation:
-    """Класс авторизации телеграм клиента"""
-
-    # TODO: Инкапсулировать методы для авторизации
-
-
 class AsyncTelegram:
     """Асинхронный телеграм клиент"""
 
@@ -63,9 +54,8 @@ class AsyncTelegram:
         self.settings = settings
         self.api = API(self)
 
-        self._authorized = False
-        self._is_enabled = False
-        self.auth_code = None
+        self.is_enabled = False
+        self.is_killing = False
 
         self._updates: Dict[str, dict] = {}
         self._update_handlers: DefaultDict[str, List[Callable]] = defaultdict(list)
@@ -83,22 +73,6 @@ class AsyncTelegram:
             loop=self._loop,
         )
 
-        self.authorization_states_mapping = {
-            None: self.get_authorization_state,
-            'authorizationStateWaitTdlibParameters': self._set_initial_params,
-            'authorizationStateWaitEncryptionKey': self._send_encryption_key,
-            'authorizationStateWaitPhoneNumber': self._send_phone_number_or_bot_token,
-            'authorizationStateWaitCode': self._send_auth_code,
-            'authorizationStateWaitRegistration': self._send_register_user,
-            'authorizationStateWaitPassword': self._send_auth_password,
-            'authorizationStateReady': self._complete_authorization,
-            'authorizationStateLoggingOut': lambda *a, **k: None,
-            'authorizationStateClosing': lambda *a, **k: None,
-            'authorizationStateClosed': self.kill,
-        }
-
-        self.authorization_state = None
-
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGABRT, self._signal_handler)
@@ -108,7 +82,7 @@ class AsyncTelegram:
         self.stop()
 
     def run(self):
-        self._is_enabled = True
+        self.is_enabled = True
         self.create_task(self._tdjson_worker())
         self.create_task(self._handlers_worker())
         self.run_forever()
@@ -118,8 +92,13 @@ class AsyncTelegram:
             self._loop.run_forever()
         finally:
             self.cancel_tasks()
+
             self._loop.run_until_complete(self._loop.shutdown_asyncgens())
             self._loop.run_until_complete(self.handler_workers_queue.join())
+
+            if self.is_killing:
+                self._loop.close()
+                self._tdjson.stop()
 
     def create_task(self, coro):
         self._loop_tasks.append(
@@ -141,17 +120,17 @@ class AsyncTelegram:
         [f.cancel() for f in pending]
         [f.result() for f in done]
 
-    def stop(self):
-        self._is_enabled = False
+    def stop(self, kill=False):
+        if kill:
+            self.is_killing = True
+        self.is_enabled = False
         self._loop.stop()
 
     def kill(self):
-        self.stop()
-        self._loop.close()
-        self._tdjson.stop()
+        self.stop(kill=True)
 
     async def _tdjson_worker(self) -> None:
-        while self._is_enabled:
+        while self.is_enabled:
             update = self._tdjson.receive()
 
             if update:
@@ -161,7 +140,7 @@ class AsyncTelegram:
 
     async def _handlers_worker(self) -> None:
 
-        while self._is_enabled:
+        while self.is_enabled:
             handler, update = await self.handler_workers_queue.get()
 
             try:
@@ -211,7 +190,7 @@ class AsyncTelegram:
         return Result(data, update, request_id=request_id)
 
     async def _get_update(self, request_id: Optional[str] = None) -> Dict[Any, Any]:
-        while self._is_enabled:
+        while self.is_enabled:
             result = self._updates.pop(request_id, None)
             if result is not None:
                 return result
@@ -232,159 +211,113 @@ class AsyncTelegram:
     def clear_update_handler(self, handler_type: str) -> None:
         self._update_handlers[handler_type].clear()
 
-    async def _authorization_state_handler(self, update):
-        if not self._is_enabled:
-            return
-
-        try:
-            self.authorization_state = update['authorization_state']['@type']
-        except KeyError:
-            self.authorization_state = update['@type']
-
-        method = self.authorization_states_mapping[self.authorization_state]
-        await method()
-
-    def login(self, timeout=10) -> None:
+    def login(self, timeout=10) -> bool:
         """Login process (blocking)
 
         Must be called before any other call.
         It sends initial params to the tdlib, sets database encryption key, etc.
         """
+        authorization = Authorization(self)
+        return authorization.run(timeout)
 
-        self.add_update_handler(
+
+class Authorization:
+    """Класс авторизации телеграм клиента"""
+
+    def __init__(self, client: AsyncTelegram):
+        self.client = client
+        self.api = AuthAPI(self.client)
+
+        self.authorization_states_mapping = {
+            None: self.api.get_authorization_state,
+            'authorizationStateWaitTdlibParameters': self.api.set_tdlib_parameters,
+            'authorizationStateWaitEncryptionKey': self.api.check_database_encryption_key,
+            'authorizationStateWaitPhoneNumber': self.set_phone_number_or_bot_token,
+            'authorizationStateWaitCode': self.check_authentication_code,
+            'authorizationStateWaitRegistration': self.api.register_user,
+            'authorizationStateWaitPassword': self.api.check_authentication_password,
+            'authorizationStateReady': self.complete_authorization,
+            'authorizationStateLoggingOut': lambda *a, **k: None,
+            'authorizationStateClosing': lambda *a, **k: None,
+            'authorizationStateClosed': self.client.kill,
+        }
+
+        self.authorized = False
+        self.state = None
+
+    async def authorization_state_handler(self, update):
+        if not self.client.is_enabled:
+            return
+
+        try:
+            self.state = update['authorization_state']['@type']
+        except KeyError:
+            self.state = update['@type']
+
+        method = self.authorization_states_mapping[self.state]
+        await method()
+
+    def run(self, timeout):
+        """Запускает процесс авторизации клиента"""
+        self.client.add_update_handler(
             'updateAuthorizationState',
-            self._authorization_state_handler,
+            self.authorization_state_handler,
         )
+        self.client.create_task(self._run())
+        self.client.create_task(self._wait_code(timeout))
+        self.client.run()
+        self.client.clear_update_handler('updateAuthorizationState')
 
-        self.create_task(self._login())
-        h = self._loop.call_later(timeout, self.stop)
-        self.run()
-        h.cancel()
-        self.clear_update_handler('updateAuthorizationState')
-
-        if not self._authorized:
+        if not self.authorized:
             raise TimeoutError('authorization timed out')
 
-    async def _login(self) -> None:
-        result = await self.get_authorization_state()
+        return self.authorized
+
+    async def _run(self) -> None:
+        result = await self.api.get_authorization_state()
 
         if not result:
             return
 
         result.is_valid()
 
-        await self._authorization_state_handler(result.update)
+        await self.authorization_state_handler(result.update)
 
-    async def _login_wait_code(self, timeout=30):
-        timer = self._loop.time()
-        while self._is_enabled and not self._authorized:
+    async def _wait_code(self, timeout=30):
+        loop = self.client._loop
+        timer = loop.time()
+
+        while self.client.is_enabled and not self.authorized:
 
             await asyncio.sleep(1)
 
-            if self._loop.time() - timer < timeout:
+            if loop.time() - timer < timeout:
                 continue
 
-            if self.authorization_state not in [
+            if self.state not in [
                 'authorizationStateWaitCode',
                 'authorizationStateWaitPassword',
             ]:
-                self.stop()
+                self.client.stop()
                 raise TimeoutError('LOGIN TOO LONG')
 
-            timer = self._loop.time()
+            timer = loop.time()
 
-        self.stop()
+        self.client.stop()
 
-    def get_authorization_state(self):
-        data = {'@type': 'getAuthorizationState'}
+    def check_authentication_code(self):
+        auth_code = input('auth code:')
+        return self.api.check_authentication_code(auth_code)
 
-        return self.send_data(data, request_id='getAuthorizationState')
-
-    def _set_initial_params(self):
-        data = {
-            '@type': 'setTdlibParameters',
-            'parameters': {
-                'use_test_dc': self.settings.use_test_dc,
-                'api_id': self.settings.api_id,
-                'api_hash': self.settings.api_hash,
-                'device_model': self.settings.device_model,
-                'system_version': self.settings.system_version,
-                'application_version': self.settings.application_version,
-                'system_language_code': self.settings.system_language_code,
-                'database_directory': os.path.join(
-                    self.settings.files_directory, 'database'
-                ),
-                'use_message_database': self.settings.use_message_database,
-                'files_directory': os.path.join(self.settings.files_directory, 'files'),
-            },
-        }
-
-        return self.send_data(data, request_id='updateAuthorizationState')
-
-    def _send_encryption_key(self):
-        data = {
-            '@type': 'checkDatabaseEncryptionKey',
-            'encryption_key': self.settings.database_encryption_key,
-        }
-
-        return self.send_data(data, request_id='updateAuthorizationState')
-
-    def _send_phone_number_or_bot_token(self):
+    def set_phone_number_or_bot_token(self):
         """Sends phone number or a bot_token"""
-        if self.settings.phone:
-            return self._send_phone_number()
-        elif self.settings.bot_token:
-            return self._send_bot_token()
+        if self.client.settings.phone:
+            return self.api.set_authentication_phone_number()
+        elif self.client.settings.bot_token:
+            return self.api.check_authentication_bot_token()
         else:
             raise RuntimeError('Unknown mode: both bot_token and phone are None')
 
-    def _send_phone_number(self):
-        data = {
-            '@type': 'setAuthenticationPhoneNumber',
-            'phone_number': self.settings.phone,
-            'allow_flash_call': False,
-            'is_current_phone_number': True,
-        }
-
-        return self.send_data(data, request_id='updateAuthorizationState')
-
-    def _send_bot_token(self):
-        data = {
-            '@type': 'checkAuthenticationBotToken',
-            'token': self.settings.bot_token,
-        }
-
-        return self.send_data(data, request_id='updateAuthorizationState')
-
-    def _send_auth_code(self):
-        auth_code = input('auth code: ')
-        data = {'@type': 'checkAuthenticationCode', 'code': str(auth_code)}
-
-        return self.send_data(data, request_id='updateAuthorizationState')
-
-    def _send_register_user(self):
-
-        if not self.settings.first_name:
-            raise ValueError('first name not set')
-
-        data = {
-            '@type': 'registerUser',
-            'first_name': str(self.settings.first_name),
-            'last_name': str(self.settings.last_name or ''),
-        }
-
-        return self.send_data(data, request_id='updateAuthorizationState')
-
-    def _send_auth_password(self):
-        password = self.settings.password
-
-        if not password:
-            raise ValueError('password not set')
-
-        data = {'@type': 'checkAuthenticationPassword', 'password': password}
-
-        return self.send_data(data, request_id='updateAuthorizationState')
-
-    async def _complete_authorization(self) -> None:
-        self._authorized = True
-        self.stop()
+    async def complete_authorization(self) -> None:
+        self.authorized = True
+        self.client.stop()

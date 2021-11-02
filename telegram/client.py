@@ -53,6 +53,7 @@ class AsyncTelegram:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.api = API(self)
+        self.authorization = Authorization(self)
 
         self.is_enabled = False
         self.is_killing = False
@@ -78,8 +79,7 @@ class AsyncTelegram:
         signal.signal(signal.SIGABRT, self._signal_handler)
 
     def _signal_handler(self, signum: int, frame: FrameType) -> None:
-        print('_signal_handler')
-        self.stop()
+        self.stop(kill=True)
 
     def run(self):
         self.is_enabled = True
@@ -217,8 +217,7 @@ class AsyncTelegram:
         Must be called before any other call.
         It sends initial params to the tdlib, sets database encryption key, etc.
         """
-        authorization = Authorization(self)
-        return authorization.run(timeout)
+        return self.authorization.run(timeout)
 
 
 class Authorization:
@@ -237,9 +236,9 @@ class Authorization:
             'authorizationStateWaitRegistration': self.api.register_user,
             'authorizationStateWaitPassword': self.api.check_authentication_password,
             'authorizationStateReady': self.complete_authorization,
-            'authorizationStateLoggingOut': lambda *a, **k: None,
-            'authorizationStateClosing': lambda *a, **k: None,
-            'authorizationStateClosed': self.client.kill,
+            'authorizationStateLoggingOut': self.client.api.log_out,
+            'authorizationStateClosing': self.api.get_authorization_state,
+            'authorizationStateClosed': self.kill_client,
         }
 
         self.authorized = False
@@ -266,7 +265,7 @@ class Authorization:
         self.client.create_task(self._run())
         self.client.create_task(self._wait_code(timeout))
         self.client.run()
-        self.client.clear_update_handler('updateAuthorizationState')
+        # self.client.clear_update_handler('updateAuthorizationState')
 
         if not self.authorized:
             raise TimeoutError('authorization timed out')
@@ -284,6 +283,9 @@ class Authorization:
         await self.authorization_state_handler(result.update)
 
     async def _wait_code(self, timeout=30):
+        if timeout is None:
+            return
+
         loop = self.client._loop
         timer = loop.time()
 
@@ -321,3 +323,6 @@ class Authorization:
     async def complete_authorization(self) -> None:
         self.authorized = True
         self.client.stop()
+
+    async def kill_client(self) -> None:
+        self.client.kill()

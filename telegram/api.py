@@ -265,6 +265,12 @@ class API(BaseAPI):
             'close',
         )
 
+    def log_out(self):
+        """Запрос на выход из клиента"""
+        return self.send_data(
+            'logOut',
+        )
+
     def view_messages(self, chat_id: int, message_ids: list):
         """Запрос на просмотр сообщений. Все непрочитанные сообщения
         в чате с указанным ID окажутся прочитанными

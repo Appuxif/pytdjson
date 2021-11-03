@@ -37,6 +37,13 @@ class AuthAPI(BaseAPI):
         )
 
     def set_tdlib_parameters(self):
+
+        if not self.client.settings.api_id:
+            raise ValueError('api_id not set')
+
+        if not self.client.settings.api_hash:
+            raise ValueError('api_id not set')
+
         parameters = {
             "use_test_dc": self.client.settings.use_test_dc,
             "api_id": self.client.settings.api_id,

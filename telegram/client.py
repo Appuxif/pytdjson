@@ -164,12 +164,9 @@ class AsyncTelegram:
         while self.is_enabled:
             handler, update = await self.handler_workers_queue.get()
 
-            try:
-                result = handler(update)
-                if asyncio.iscoroutine(result):
-                    await result
-            except Exception as e:
-                self.logger.exception('handlers_worker error')
+            result = handler(update)
+            if asyncio.iscoroutine(result):
+                await result
 
             self.handler_workers_queue.task_done()
             await asyncio.sleep(0.1)
@@ -191,7 +188,6 @@ class AsyncTelegram:
             self.logger.debug(f'handling exception for {coro.__name__}')
             await coro
         except Exception as e:
-            self.logger.debug(f'exception occurred for {coro.__name__}: {e}')
             self._loop_exception_handler(
                 self._loop,
                 {'exception': e, 'message': str(e)},

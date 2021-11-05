@@ -84,7 +84,7 @@ class AsyncTelegram:
 
     def _loop_exception_handler(self, loop, context):
         msg = context.get('exception', context['message'])
-        self.logger.error(f'Caught exception: {msg}', extra=context)
+        self.logger.exception(f'Caught exception: {msg}', extra=context)
         self.stop()
 
     def _signal_handler(self, signum: int, frame: FrameType) -> None:
@@ -96,6 +96,7 @@ class AsyncTelegram:
         self.is_enabled = True
         self.create_task(self._tdjson_worker())
         self.create_task(self._handlers_worker())
+        self.create_task(self._tasks_worker())
         self.run_forever()
 
     def run_forever(self):
@@ -116,7 +117,7 @@ class AsyncTelegram:
     def create_task(self, coro):
         self.logger.debug(f'created task: {coro.__name__}')
         self._loop_tasks.append(
-            self._loop.create_task(coro),
+            self._loop.create_task(self._handle_task_exception(coro)),
         )
 
     def cancel_tasks(self):
@@ -172,6 +173,24 @@ class AsyncTelegram:
 
             self.handler_workers_queue.task_done()
             await asyncio.sleep(0.1)
+
+    async def _tasks_worker(self) -> None:
+        while self.is_enabled:
+            _loop_tasks = []
+            for task in self._loop_tasks:
+                if not task.done():
+                    _loop_tasks.append(task)
+                    continue
+                task.result()
+            self._loop_tasks.clear()
+            self._loop_tasks.extend(_loop_tasks)
+            await asyncio.sleep(0.1)
+
+    async def _handle_task_exception(self, coro):
+        try:
+            await coro
+        except Exception as e:
+            self._loop_exception_handler(self._loop, {'exception': e})
 
     async def _update_async_result(self, update: Dict[Any, Any]) -> None:
 

@@ -12,7 +12,7 @@ from .api import API, AuthAPI
 from .tdjson import TDJson
 from .utils import Result
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 
 MESSAGE_HANDLER_TYPE: str = 'updateNewMessage'
@@ -55,6 +55,9 @@ class AsyncTelegram:
         self.api = API(self)
         self.authorization = Authorization(self)
 
+        self.logger = logging.getLogger(str(self))
+        self.logger.info('initializing...')
+
         self.is_enabled = False
         self.is_killing = False
 
@@ -67,6 +70,7 @@ class AsyncTelegram:
         )
 
         self._loop = asyncio.new_event_loop()
+        self._loop.set_exception_handler(self._loop_exception_handler)
         self._loop_tasks = []
 
         self.handler_workers_queue = asyncio.Queue(
@@ -78,10 +82,18 @@ class AsyncTelegram:
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGABRT, self._signal_handler)
 
+    def _loop_exception_handler(self, loop, context):
+        msg = context.get('exception', context['message'])
+        self.logger.error(f'Caught exception: {msg}', extra=context)
+        self.logger.info('stopping...')
+        self.stop()
+
     def _signal_handler(self, signum: int, frame: FrameType) -> None:
+        self.logger.info('stop signal received')
         self.stop(kill=True)
 
     def run(self):
+        self.logger.info('running...')
         self.is_enabled = True
         self.create_task(self._tdjson_worker())
         self.create_task(self._handlers_worker())
@@ -89,8 +101,10 @@ class AsyncTelegram:
 
     def run_forever(self):
         try:
+            self.logger.info('run forever')
             self._loop.run_forever()
         finally:
+            self.logger.info('cancel running forever')
             self.cancel_tasks()
 
             self._loop.run_until_complete(self._loop.shutdown_asyncgens())
@@ -101,6 +115,7 @@ class AsyncTelegram:
                 self._tdjson.stop()
 
     def create_task(self, coro):
+        self.logger.info(f'created task: {coro}')
         self._loop_tasks.append(
             self._loop.create_task(coro),
         )
@@ -109,6 +124,7 @@ class AsyncTelegram:
         while self._loop_tasks:
             task = self._loop_tasks.pop()
             task.cancel()
+        self.logger.info('all tasks canceled')
 
     async def _wait_futures(self, fs, timeout=None):
         done, pending = await asyncio.wait(
@@ -130,6 +146,7 @@ class AsyncTelegram:
         self.stop(kill=True)
 
     async def _tdjson_worker(self) -> None:
+        self.logger.info('tdjson worker starting...')
         while self.is_enabled:
             update = self._tdjson.receive()
 
@@ -139,7 +156,7 @@ class AsyncTelegram:
             await asyncio.sleep(0.1)
 
     async def _handlers_worker(self) -> None:
-
+        self.logger.info('handlers worker starting...')
         while self.is_enabled:
             handler, update = await self.handler_workers_queue.get()
 
@@ -148,7 +165,7 @@ class AsyncTelegram:
                 if asyncio.iscoroutine(result):
                     await result
             except Exception as e:
-                logger.exception('handlers_worker error')
+                self.logger.exception('handlers_worker error')
 
             self.handler_workers_queue.task_done()
             await asyncio.sleep(0.1)
@@ -164,7 +181,7 @@ class AsyncTelegram:
             request_id = update.get('@extra', {}).get('request_id')
 
         if not request_id:
-            logger.debug('request_id has not been found in the update')
+            self.logger.debug('request_id has not been found in the update')
         else:
             self._updates[request_id] = update
 
@@ -205,6 +222,7 @@ class AsyncTelegram:
         self.add_update_handler(MESSAGE_HANDLER_TYPE, func)
 
     def add_update_handler(self, handler_type: str, func: Callable) -> None:
+        self.logger.debug(f'update handler added: {handler_type} {func}')
         if func not in self._update_handlers[handler_type]:
             self._update_handlers[handler_type].append(func)
 
@@ -217,7 +235,10 @@ class AsyncTelegram:
         Must be called before any other call.
         It sends initial params to the tdlib, sets database encryption key, etc.
         """
-        return self.authorization.run(timeout)
+        self.logger.info('logging...')
+        result = self.authorization.run(timeout)
+        self.logger.info('logging finished')
+        return result
 
 
 class Authorization:
@@ -252,12 +273,14 @@ class Authorization:
             self.state = update['authorization_state']['@type']
         except KeyError:
             self.state = update['@type']
+        self.client.logger.info(f'authorization state received: {self.state}')
 
         method = self.authorization_states_mapping[self.state]
         await method()
 
     def run(self, timeout):
         """Запускает процесс авторизации клиента"""
+        self.client.logger.info('run authorization process...')
         self.client.add_update_handler(
             'updateAuthorizationState',
             self.authorization_state_handler,
@@ -285,6 +308,7 @@ class Authorization:
     async def _wait_code(self, timeout=30):
         if timeout is None:
             return
+        self.client.logger.info('waiting code')
 
         loop = self.client._loop
         timer = loop.time()
@@ -302,6 +326,7 @@ class Authorization:
             ]:
                 self.client.stop()
                 raise TimeoutError('LOGIN TOO LONG')
+            self.client.logger.info(f'state: {self.state}')
 
             timer = loop.time()
 
@@ -321,6 +346,7 @@ class Authorization:
             raise RuntimeError('Unknown mode: both bot_token and phone are None')
 
     async def complete_authorization(self) -> None:
+        self.client.logger.info('authorization completed')
         self.authorized = True
         self.client.stop()
 

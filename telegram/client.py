@@ -115,7 +115,7 @@ class AsyncTelegram:
                 self._tdjson.stop()
 
     def create_task(self, coro):
-        self.logger.info(f'created task: {coro}')
+        self.logger.info(f'created task: {coro.__name__}')
         self._loop_tasks.append(
             self._loop.create_task(coro),
         )
@@ -180,9 +180,7 @@ class AsyncTelegram:
         else:
             request_id = update.get('@extra', {}).get('request_id')
 
-        if not request_id:
-            self.logger.debug('request_id has not been found in the update')
-        else:
+        if request_id:
             self._updates[request_id] = update
 
     async def send_data(
@@ -222,7 +220,7 @@ class AsyncTelegram:
         self.add_update_handler(MESSAGE_HANDLER_TYPE, func)
 
     def add_update_handler(self, handler_type: str, func: Callable) -> None:
-        self.logger.debug(f'update handler added: {handler_type} {func}')
+        self.logger.debug(f'update handler added: {handler_type} {func.__name__}')
         if func not in self._update_handlers[handler_type]:
             self._update_handlers[handler_type].append(func)
 

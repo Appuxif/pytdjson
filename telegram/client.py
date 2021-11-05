@@ -107,8 +107,8 @@ class AsyncTelegram:
             self.logger.info('cancel running forever')
             self.cancel_tasks()
 
-            self._loop.run_until_complete(self._loop.shutdown_asyncgens())
             self._loop.run_until_complete(self.handler_workers_queue.join())
+            self._loop.run_until_complete(self._loop.shutdown_asyncgens())
 
             if self.is_killing:
                 self._loop.close()
@@ -164,11 +164,16 @@ class AsyncTelegram:
         while self.is_enabled:
             handler, update = await self.handler_workers_queue.get()
 
-            result = handler(update)
-            if asyncio.iscoroutine(result):
-                await result
+            try:
+                result = handler(update)
+                if asyncio.iscoroutine(result):
+                    await result
 
-            self.handler_workers_queue.task_done()
+            except Exception as e:
+                raise e
+
+            finally:
+                self.handler_workers_queue.task_done()
             await asyncio.sleep(0.1)
 
     async def _tasks_worker(self) -> None:

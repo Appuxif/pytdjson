@@ -85,7 +85,6 @@ class AsyncTelegram:
     def _loop_exception_handler(self, loop, context):
         msg = context.get('exception', context['message'])
         self.logger.error(f'Caught exception: {msg}', extra=context)
-        self.logger.info('stopping...')
         self.stop()
 
     def _signal_handler(self, signum: int, frame: FrameType) -> None:
@@ -115,7 +114,7 @@ class AsyncTelegram:
                 self._tdjson.stop()
 
     def create_task(self, coro):
-        self.logger.info(f'created task: {coro.__name__}')
+        self.logger.debug(f'created task: {coro.__name__}')
         self._loop_tasks.append(
             self._loop.create_task(coro),
         )
@@ -124,7 +123,7 @@ class AsyncTelegram:
         while self._loop_tasks:
             task = self._loop_tasks.pop()
             task.cancel()
-        self.logger.info('all tasks canceled')
+        self.logger.debug('all tasks canceled')
 
     async def _wait_futures(self, fs, timeout=None):
         done, pending = await asyncio.wait(
@@ -138,7 +137,11 @@ class AsyncTelegram:
 
     def stop(self, kill=False):
         if kill:
+            self.logger.info('killing...')
             self.is_killing = True
+        else:
+            self.logger.info('stopping...')
+
         self.is_enabled = False
         self._loop.stop()
 
@@ -146,7 +149,7 @@ class AsyncTelegram:
         self.stop(kill=True)
 
     async def _tdjson_worker(self) -> None:
-        self.logger.info('tdjson worker starting...')
+        self.logger.debug('tdjson worker starting...')
         while self.is_enabled:
             update = self._tdjson.receive()
 
@@ -156,7 +159,7 @@ class AsyncTelegram:
             await asyncio.sleep(0.1)
 
     async def _handlers_worker(self) -> None:
-        self.logger.info('handlers worker starting...')
+        self.logger.debug('handlers worker starting...')
         while self.is_enabled:
             handler, update = await self.handler_workers_queue.get()
 
@@ -271,7 +274,7 @@ class Authorization:
             self.state = update['authorization_state']['@type']
         except KeyError:
             self.state = update['@type']
-        self.client.logger.info(f'authorization state received: {self.state}')
+        self.client.logger.debug(f'authorization state received: {self.state}')
 
         method = self.authorization_states_mapping[self.state]
         await method()

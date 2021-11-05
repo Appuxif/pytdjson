@@ -84,7 +84,7 @@ class AsyncTelegram:
 
     def _loop_exception_handler(self, loop, context):
         msg = context.get('exception', context['message'])
-        self.logger.exception(f'Caught exception: {msg}', extra=context)
+        self.logger.exception(f'Caught exception: {msg}')
         self.stop()
 
     def _signal_handler(self, signum: int, frame: FrameType) -> None:
@@ -188,9 +188,16 @@ class AsyncTelegram:
 
     async def _handle_task_exception(self, coro):
         try:
+            self.logger.debug(f'handling exception for {coro.__name__}')
             await coro
         except Exception as e:
-            self._loop_exception_handler(self._loop, {'exception': e})
+            self.logger.debug(f'exception occurred for {coro.__name__}: {e}')
+            self._loop_exception_handler(
+                self._loop,
+                {'exception': e, 'message': str(e)},
+            )
+        else:
+            self.logger.debug(f'task done exception not occurred for {coro.__name__}')
 
     async def _update_async_result(self, update: Dict[Any, Any]) -> None:
 

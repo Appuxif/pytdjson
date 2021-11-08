@@ -41,3 +41,8 @@ tg.add_message_handler(handler)
 tg.run()
 
 ```
+
+## Projects
+Проекты, успешно использующие эту библиотеку  
+
+* [telegramio](https://telegramio.space) - Сервис по автоматизации телеграма

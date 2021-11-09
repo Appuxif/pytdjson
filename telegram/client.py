@@ -181,15 +181,8 @@ class AsyncTelegram:
 
     async def _tasks_worker(self) -> None:
         while self.is_enabled:
-            _loop_tasks = []
-            for task in self._loop_tasks:
-                if not task.done():
-                    _loop_tasks.append(task)
-                    continue
-                task.result()
-            self._loop_tasks.clear()
-            self._loop_tasks.extend(_loop_tasks)
-            await asyncio.sleep(0.1)
+            self._loop_tasks = [task for task in self._loop_tasks if not task.done()]
+            await asyncio.sleep(1)
 
     async def _handle_task_exception(self, coro):
         try:

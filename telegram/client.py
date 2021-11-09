@@ -137,6 +137,9 @@ class AsyncTelegram:
         [f.result() for f in done]
 
     def stop(self, kill=False):
+        if not self.is_enabled or self.is_killing:
+            return
+
         if kill:
             self.logger.info('killing...')
             self.is_killing = True

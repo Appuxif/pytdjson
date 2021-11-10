@@ -12,9 +12,6 @@ from .api import API, AuthAPI
 from .tdjson import TDJson
 from .utils import Result
 
-# logger = logging.getLogger(__name__)
-
-
 MESSAGE_HANDLER_TYPE: str = 'updateNewMessage'
 
 
@@ -56,7 +53,6 @@ class AsyncTelegram:
         self.authorization = Authorization(self)
 
         self.logger = logging.getLogger(str(self))
-        self.logger.info('initializing...')
 
         self.is_enabled = False
         self.is_killing = False
@@ -88,11 +84,11 @@ class AsyncTelegram:
         self.stop()
 
     def _signal_handler(self, signum: int, frame: FrameType) -> None:
-        self.logger.info('stop signal received')
+        self.logger.debug('stop signal received')
         self.stop(kill=True)
 
     def run(self):
-        self.logger.info('running...')
+        self.logger.debug('running...')
         self.is_enabled = True
         self.create_task(self._tdjson_worker())
         self.create_task(self._handlers_worker())
@@ -101,10 +97,10 @@ class AsyncTelegram:
 
     def run_forever(self):
         try:
-            self.logger.info('run forever')
+            self.logger.debug('run forever')
             self._loop.run_forever()
         finally:
-            self.logger.info('cancel running forever')
+            self.logger.debug('cancel running forever')
             self.cancel_tasks()
 
             self._loop.run_until_complete(self.handler_workers_queue.join())
@@ -141,10 +137,7 @@ class AsyncTelegram:
             return
 
         if kill:
-            self.logger.info('killing...')
             self.is_killing = True
-        else:
-            self.logger.info('stopping...')
 
         self.is_enabled = False
         self._loop.stop()
@@ -259,9 +252,7 @@ class AsyncTelegram:
         Must be called before any other call.
         It sends initial params to the tdlib, sets database encryption key, etc.
         """
-        self.logger.info('logging...')
         result = self.authorization.run(timeout)
-        self.logger.info('logging finished')
         return result
 
 
@@ -315,7 +306,7 @@ class Authorization:
         # self.client.clear_update_handler('updateAuthorizationState')
 
         if not self.authorized:
-            raise TimeoutError('authorization timed out')
+            raise TimeoutError('authorization fails')
 
         return self.authorized
 

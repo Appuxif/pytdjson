@@ -295,7 +295,6 @@ class Authorization:
 
     def run(self, timeout):
         """Запускает процесс авторизации клиента"""
-        self.client.logger.info('run authorization process...')
         self.client.add_update_handler(
             'updateAuthorizationState',
             self.authorization_state_handler,
@@ -323,7 +322,6 @@ class Authorization:
     async def _wait_code(self, timeout=30):
         if timeout is None:
             return
-        self.client.logger.info('waiting code')
 
         loop = self.client._loop
         timer = loop.time()
@@ -341,7 +339,7 @@ class Authorization:
             ]:
                 self.client.stop()
                 raise TimeoutError('LOGIN TOO LONG')
-            self.client.logger.info(f'state: {self.state}')
+            self.client.logger.debug(f'state: {self.state}')
 
             timer = loop.time()
 
@@ -361,7 +359,6 @@ class Authorization:
             raise RuntimeError('Unknown mode: both bot_token and phone are None')
 
     async def complete_authorization(self) -> None:
-        self.client.logger.info('authorization completed')
         self.authorized = True
         self.client.stop()
 

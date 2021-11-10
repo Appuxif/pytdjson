@@ -80,8 +80,6 @@ class AsyncTelegram:
         signal.signal(signal.SIGABRT, self._signal_handler)
 
     def _loop_exception_handler(self, loop, context):
-        msg = context.get('exception', context['message'])
-        self.logger.exception(f'Caught exception: {msg}')
         self.stop()
 
     def _signal_handler(self, signum: int, frame: FrameType) -> None:
@@ -93,7 +91,6 @@ class AsyncTelegram:
         self.is_enabled = True
         self.create_task(self._tdjson_worker())
         self.create_task(self._handlers_worker())
-        self.create_task(self._tasks_worker())
         self.run_forever()
 
     def run_forever(self):
@@ -113,14 +110,19 @@ class AsyncTelegram:
 
     def create_task(self, coro):
         self.logger.debug(f'created task: {coro.__name__}')
-        self._loop_tasks.append(
-            self._loop.create_task(self._handle_task_exception(coro)),
-        )
+        task = self._loop.create_task(coro)
+        task.add_done_callback(lambda t: t.result())
+        self._loop_tasks.append(task)
 
     def cancel_tasks(self):
+        [task.cancel() for task in self._loop_tasks]
         while self._loop_tasks:
             task = self._loop_tasks.pop()
-            task.cancel()
+            self.logger.debug('getting result: %s', task)
+            try:
+                task.result()
+            except asyncio.exceptions.InvalidStateError:
+                pass
         self.logger.debug('all tasks canceled')
 
     async def _wait_futures(self, fs, timeout=None):
@@ -172,23 +174,6 @@ class AsyncTelegram:
             finally:
                 self.handler_workers_queue.task_done()
             await asyncio.sleep(0.1)
-
-    async def _tasks_worker(self) -> None:
-        while self.is_enabled:
-            self._loop_tasks = [task for task in self._loop_tasks if not task.done()]
-            await asyncio.sleep(1)
-
-    async def _handle_task_exception(self, coro):
-        try:
-            self.logger.debug(f'handling exception for {coro.__name__}')
-            await coro
-        except Exception as e:
-            self._loop_exception_handler(
-                self._loop,
-                {'exception': e, 'message': str(e)},
-            )
-        else:
-            self.logger.debug(f'task done exception not occurred for {coro.__name__}')
 
     async def _update_async_result(self, update: Dict[Any, Any]) -> None:
 
@@ -316,7 +301,7 @@ class Authorization:
         self.client.run()
 
         if not self.authorized:
-            raise TimeoutError('authorization fails')
+            raise RuntimeError('authorization fails')
 
         return self.authorized
 

@@ -12,8 +12,10 @@ or
 
 ## Example
 
-Простейший пример
+Простейший пример  
 
+Сначала запустить авторизацию, чтобы запросить код.  
+Будет выброшена ошибка ValueError и авторизация прервется.
 ```py
 
 from telegram.client import Settings, AsyncTelegram
@@ -24,10 +26,30 @@ settings = Settings(
     api_hash='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     database_encryption_key='mytestkeyshouldbechanged',
     phone='+79999999999',
-    password='2FATelegramPassword',
-    library_path='./telegram/lib/linux/libtdjson.so',
     files_directory='/tmp/telegram/',
-    use_message_database=False,
+)
+
+
+tg = AsyncTelegram(settings)
+tg.login()
+
+```
+
+Повторно запустить и указать код и, при необходимости,  
+пароль для двухфакторной аутентификации
+```py
+
+from telegram.client import Settings, AsyncTelegram
+
+
+settings = Settings(
+    api_id=1111111,
+    api_hash='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    database_encryption_key='mytestkeyshouldbechanged',
+    phone='+79999999999',
+    auth_code='123456',
+    password='2FATelegramPassword',
+    files_directory='/tmp/telegram/',
 )
 
 
@@ -41,6 +63,9 @@ tg.add_message_handler(handler)
 tg.run()
 
 ```
+
+При последующих запусках код и пароль уже будут не нужны, 
+авторизация будет проходить по сессии, которую сгенерирует tdlib
 
 ## Projects
 Проекты, успешно использующие эту библиотеку  

@@ -63,14 +63,12 @@ class AuthAPI(BaseAPI):
         return self.send_data(
             'setTdlibParameters',
             parameters=parameters,
-            request_id='updateAuthorizationState',
         )
 
     def check_database_encryption_key(self):
         return self.send_data(
             'checkDatabaseEncryptionKey',
             encryption_key=self.client.settings.database_encryption_key,
-            request_id='updateAuthorizationState',
         )
 
     def set_authentication_phone_number(self):
@@ -84,7 +82,6 @@ class AuthAPI(BaseAPI):
             phone_number=phone,
             allow_flash_call=False,
             is_current_phone_number=True,
-            request_id='updateAuthorizationState',
         )
 
     def check_authentication_bot_token(self):
@@ -96,15 +93,18 @@ class AuthAPI(BaseAPI):
         return self.send_data(
             'checkAuthenticationBotToken',
             token=token,
-            request_id='updateAuthorizationState',
         )
 
     def check_authentication_code(self, auth_code=None):
         """Запрос для проверки кода авторизации"""
+        auth_code = self.client.settings.auth_code
+
+        if not auth_code:
+            raise ValueError('auth_code not set')
+
         return self.send_data(
             'checkAuthenticationCode',
-            code=str(auth_code),
-            request_id='updateAuthorizationState',
+            code=auth_code,
         )
 
     def register_user(self):
@@ -119,7 +119,6 @@ class AuthAPI(BaseAPI):
             'registerUser',
             first_name=str(first_name),
             last_name=str(last_name or ''),
-            request_id='updateAuthorizationState',
         )
 
     def check_authentication_password(self):
@@ -131,7 +130,6 @@ class AuthAPI(BaseAPI):
         return self.send_data(
             'checkAuthenticationPassword',
             password=password,
-            request_id='updateAuthorizationState',
         )
 
 

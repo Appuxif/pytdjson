@@ -11,9 +11,9 @@ from telegram.types.update import (
 )
 
 
-class MessageTypeTestCase(TestCase):
+class UpdateTestCase(TestCase):
     """
-    Тест кейс для объекта Message
+    Тест кейс для объекта Update
     """
 
     def test_not_valid_update(self):
@@ -23,7 +23,7 @@ class MessageTypeTestCase(TestCase):
         with self.assertRaises(KeyError):
             build_update(update_dict)
 
-    @patch('telegram.types.update.build_message', return_value='fake_message_obj')
+    @patch('telegram.types.update.Message', return_value='fake_message_obj')
     def test_update_new_message(self, *args):
         """Обновление updateNewMessage"""
         update_dict = {'@type': 'updateNewMessage', 'message': 'fake_message_obj'}

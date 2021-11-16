@@ -56,9 +56,13 @@ message2 = {
 }
 
 
-@patch(
-    'telegram.types.message.build_message_content', return_value='fake_message_content'
+patch_build_message_content = patch(
+    target='telegram.types.message.build_message_content',
+    return_value='fake_message_content',
 )
+
+
+@patch_build_message_content
 class MessageTestCase(TestCase):
     """
     Тест кейс для объекта Message

@@ -1,10 +1,8 @@
 """https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_update.html"""
 from dataclasses import dataclass
 from enum import Enum
-from functools import partial
-from typing import Callable
 
-from .base import build_from_mapping
+from .base import ObjectBuilder
 from .files import File
 from .message import Message
 
@@ -13,7 +11,7 @@ __all__ = (
     'UpdateAuthorizationState',
     'UpdateNewMessage',
     'UpdateFile',
-    'build_update',
+    'Update',
 )
 
 
@@ -61,9 +59,14 @@ class UpdateFile:
         self.file = File(self.raw.pop('file'))
 
 
-update_types_mapping = {
-    'updateAuthorizationState': UpdateAuthorizationState,
-    'updateFile': UpdateFile,
-    'updateNewMessage': UpdateNewMessage,
-}
-build_update: Callable = partial(build_from_mapping, update_types_mapping)
+class UpdateBuilder(ObjectBuilder):
+    """Билдер, возвращает один из типов Update"""
+
+    mapping = {
+        'updateAuthorizationState': UpdateAuthorizationState,
+        'updateFile': UpdateFile,
+        'updateNewMessage': UpdateNewMessage,
+    }
+
+
+Update = UpdateBuilder()

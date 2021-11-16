@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from enum import Enum
-from functools import partial
-from typing import Callable
 
-from telegram.types.base import build_from_mapping
+from telegram.types.base import ObjectBuilder
 from telegram.types.files import AnimationFile
+
+__all__ = ('MessageContent',)
 
 
 class TextParseModeTypes(Enum):
@@ -184,9 +184,13 @@ class MessageAnimation:
         self.caption = FormattedText(self.raw.pop('caption'))
 
 
-message_content_mapping = {
-    'messageAnimation': MessageAnimation,
-    'messageText': MessageText,
-}
+class MessageContentBuilder(ObjectBuilder):
+    """Билдер, возвращает один из MessageContent"""
 
-build_message_content: Callable = partial(build_from_mapping, message_content_mapping)
+    mapping = {
+        'messageAnimation': MessageAnimation,
+        'messageText': MessageText,
+    }
+
+
+MessageContent = MessageContentBuilder()

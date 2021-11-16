@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from telegram.types.message_content import build_message_content
+from telegram.types.message_content import MessageContent
 
 __all__ = ('MessageSenderType', 'MessageSender', 'MessageForwardInfo', 'Message')
 
@@ -69,7 +69,7 @@ class Message:
 
     sender: MessageSender = None
     forward_info: MessageForwardInfo = None
-    content: object = None
+    content: MessageContent = None
     reply_markup: dict = None
 
     def __post_init__(self):
@@ -77,7 +77,7 @@ class Message:
         forward_info = self.raw.pop('forward_info', None)
         if forward_info:
             self.forward_info = MessageForwardInfo(forward_info)
-        self.content = build_message_content(self.raw.pop('content'))
+        self.content = MessageContent(self.raw.pop('content'))
 
         keys = self.raw.keys()
         keys = list(keys)

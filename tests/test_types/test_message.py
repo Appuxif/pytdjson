@@ -61,7 +61,7 @@ message_sender_chat = {
 
 
 patch_build_message_content = patch(
-    target='telegram.types.message.build_message_content',
+    target='telegram.types.message.MessageContent',
     return_value='fake_message_content',
 )
 

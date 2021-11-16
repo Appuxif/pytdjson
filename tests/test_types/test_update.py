@@ -4,10 +4,10 @@ from unittest.mock import patch
 from telegram.types.files import File
 from telegram.types.update import (
     AuthorizationState,
+    Update,
     UpdateAuthorizationState,
     UpdateFile,
     UpdateNewMessage,
-    build_update,
 )
 
 
@@ -21,14 +21,14 @@ class UpdateTestCase(TestCase):
         update_dict = {'@type': 'notValidUpdate'}
 
         with self.assertRaises(KeyError):
-            build_update(update_dict)
+            Update(update_dict)
 
     @patch('telegram.types.update.Message', return_value='fake_message_obj')
     def test_update_new_message(self, *args):
         """Обновление updateNewMessage"""
         update_dict = {'@type': 'updateNewMessage', 'message': 'fake_message_obj'}
 
-        update = build_update(update_dict)
+        update = Update(update_dict)
 
         self.assertIsInstance(update, UpdateNewMessage)
         self.assertEqual('fake_message_obj', update.message)
@@ -42,7 +42,7 @@ class UpdateTestCase(TestCase):
             },
         }
 
-        update = build_update(update_dict)
+        update = Update(update_dict)
 
         self.assertIsInstance(update, UpdateAuthorizationState)
         self.assertIsInstance(update.authorization_state, AuthorizationState)
@@ -62,7 +62,7 @@ class UpdateTestCase(TestCase):
             },
         }
 
-        update = build_update(update_dict)
+        update = Update(update_dict)
 
         self.assertIsInstance(update, UpdateFile)
         self.assertIsInstance(update.file, File)

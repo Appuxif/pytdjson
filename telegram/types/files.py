@@ -19,9 +19,7 @@ class File:
         self.size = self.raw.pop('size')
         self.expected_size = self.raw.pop('expected_size')
 
-        local = self.raw.pop('local')
-        self.local_path = local['path']
+        self.local_path = self.raw['local'].pop('path')
 
-        remote = self.raw.pop('remote')
-        self.remote_id = remote['id']
-        self.remote_unique_id = remote['unique_id']
+        self.remote_id = self.raw['remote'].pop('id')
+        self.remote_unique_id = self.raw['remote'].pop('unique_id')

@@ -43,7 +43,7 @@ class MessageTextTestCase(TestCase):
         self.assertEqual(content.text.text, '+79999999999')
         self.assertListEqual(content.text.entities, [])
 
-    def test_message_text_phone_entities(self):
+    def test_phone_number_entities(self):
         """Номер телефона в форматировании"""
 
         content_dict = deepcopy(content_message_text)
@@ -60,11 +60,11 @@ class MessageTextTestCase(TestCase):
         self.assertIsNone(entity.language)
         self.assertIsNone(entity.url)
 
-    def test_message_text_user_entities(self):
+    def test_mention_name_entities(self):
         """Упоминание пользователя в форматировании"""
 
         content_dict = deepcopy(content_message_text)
-        content_dict['text']['entities'][0]['type'] = {
+        content_dict['text']['entities'][0]['type'] = {  # noqa
             '@type': 'textEntityTypeMentionName',
             'user_id': 123123,
         }

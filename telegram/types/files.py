@@ -23,3 +23,27 @@ class File:
 
         self.remote_id = self.raw['remote'].pop('id')
         self.remote_unique_id = self.raw['remote'].pop('unique_id')
+
+
+@dataclass
+class AnimationFile:
+    """Анимация"""
+
+    raw: dict
+
+    duration: int = None
+    width: int = None
+    height: int = None
+    file_name: str = None
+    mime_type: str = None
+    has_stickers: bool = None
+    animation: File = None
+
+    def __post_init__(self):
+        self.duration = self.raw.pop('duration')
+        self.width = self.raw.pop('width')
+        self.height = self.raw.pop('height')
+        self.file_name = self.raw.pop('file_name')
+        self.mime_type = self.raw.pop('mime_type')
+        self.has_stickers = self.raw.pop('has_stickers')
+        self.animation = File(self.raw.pop('file'))

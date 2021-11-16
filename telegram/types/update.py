@@ -6,7 +6,7 @@ from typing import Callable
 
 from .base import build_from_mapping
 from .files import File
-from .message import Message, build_message
+from .message import Message
 
 __all__ = (
     'AuthorizationState',
@@ -49,7 +49,7 @@ class UpdateNewMessage:
     message: Message = None
 
     def __post_init__(self):
-        self.message = build_message(self.raw.pop('message'))
+        self.message = Message(self.raw.pop('message'))
 
 
 @dataclass

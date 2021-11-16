@@ -5,9 +5,16 @@ from functools import partial
 from typing import Callable
 
 from .base import build_from_mapping
+from .files import File
 from .message import Message, build_message
 
-__all__ = ('UpdateNewMessage', 'build_update')
+__all__ = (
+    'AuthorizationState',
+    'UpdateAuthorizationState',
+    'UpdateNewMessage',
+    'UpdateFile',
+    'build_update',
+)
 
 
 class AuthorizationState(Enum):
@@ -26,27 +33,37 @@ class AuthorizationState(Enum):
     WAIT_TDLIB_PARAMETERS = 'authorizationStateWaitTdlibParameters'
 
 
-@dataclass(frozen=True)
+@dataclass
 class UpdateAuthorizationState:
-    authorization_state: AuthorizationState
+    raw: dict
+    authorization_state: AuthorizationState = None
 
-    @classmethod
-    def build(cls, update: dict) -> 'UpdateAuthorizationState':
-        authorization_state = update['authorization_state']['@type']
-        return cls(authorization_state=AuthorizationState(authorization_state))
+    def __post_init__(self):
+        authorization_state = self.raw['authorization_state'].pop('@type')
+        self.authorization_state = AuthorizationState(authorization_state)
 
 
-@dataclass(frozen=True)
+@dataclass
 class UpdateNewMessage:
-    message: Message
+    raw: dict
+    message: Message = None
 
-    @classmethod
-    def build(cls, update: dict) -> 'UpdateNewMessage':
-        return cls(message=build_message(update['message']))
+    def __post_init__(self):
+        self.message = build_message(self.raw.pop('message'))
+
+
+@dataclass
+class UpdateFile:
+    raw: dict
+    file: File = None
+
+    def __post_init__(self):
+        self.file = File(self.raw.pop('file'))
 
 
 update_types_mapping = {
-    'updateAuthorizationState': UpdateAuthorizationState.build,
-    'updateNewMessage': UpdateNewMessage.build,
+    'updateAuthorizationState': UpdateAuthorizationState,
+    'updateFile': UpdateFile,
+    'updateNewMessage': UpdateNewMessage,
 }
 build_update: Callable = partial(build_from_mapping, update_types_mapping)

@@ -4,7 +4,13 @@ from enum import Enum
 from telegram.types.base import ObjectBuilder
 from telegram.types.files import AnimationFile
 
-__all__ = ('MessageContent',)
+__all__ = (
+    'FormattedText',
+    'MessageContent',
+    'MessageText',
+    'TextEntity',
+    'TextEntityType',
+)
 
 
 class TextParseModeTypes(Enum):
@@ -14,7 +20,7 @@ class TextParseModeTypes(Enum):
     MARKDOWN = {'@type': 'textParseModeMarkdown', 'version': 2}
 
 
-class TextEntityTypeEnum(Enum):
+class TextEntityType(Enum):
     """Типы элементов форматирования текста"""
 
     BANK_CARD_NUMBER = 'textEntityTypeBankCardNumber'
@@ -37,24 +43,6 @@ class TextEntityTypeEnum(Enum):
 
 
 @dataclass
-class TextEntityType:
-    """Тип форматирования текста"""
-
-    raw: dict
-
-    type: TextEntityTypeEnum = None
-    user_id: int = None
-    language: str = None
-    url: str = None
-
-    def __post_init__(self):
-        self.type = TextEntityTypeEnum(self.raw.pop('@type'))
-        self.user_id = self.raw.pop('user_id', None)
-        self.language = self.raw.pop('language', None)
-        self.url = self.raw.pop('url', None)
-
-
-@dataclass
 class TextEntity:
     """Элемент форматирования текста"""
 
@@ -63,11 +51,21 @@ class TextEntity:
     offset: int = None
     length: int = None
     type: TextEntityType = None
+    user_id: int = None
+    language: str = None
+    url: str = None
 
     def __post_init__(self):
         self.offset = self.raw.pop('offset')
         self.length = self.raw.pop('length')
-        self.type = TextEntityType(self.raw.pop('type'))
+        _type = self.raw['type']
+        self.type = TextEntityType(_type.pop('@type'))
+        if self.type == TextEntityType.MENTION_NAME:
+            self.user_id = _type.pop('user_id')
+        elif self.type == TextEntityType.PRE_CODE:
+            self.language = _type.pop('language')
+        elif self.type == TextEntityType.TEXT_URL:
+            self.url = _type.pop('url')
 
 
 @dataclass

@@ -46,4 +46,4 @@ class AnimationFile:
         self.file_name = self.raw.pop('file_name')
         self.mime_type = self.raw.pop('mime_type')
         self.has_stickers = self.raw.pop('has_stickers')
-        self.animation = File(self.raw.pop('file'))
+        self.animation = File(self.raw.pop('animation'))

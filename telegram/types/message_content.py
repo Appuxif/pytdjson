@@ -6,6 +6,7 @@ from telegram.types.files import AnimationFile
 
 __all__ = (
     'FormattedText',
+    'MessageAnimation',
     'MessageContent',
     'MessageText',
     'TextEntity',

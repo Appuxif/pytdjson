@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from telegram.types.message import Message, MessageForwardInfo, MessageSenderType
 
-message1 = {
+message_base = {
     '@type': 'message',
     'id': 166121701376,
     'sender': {'@type': 'messageSenderUser', 'user_id': 1394101816},
@@ -45,14 +45,18 @@ message1 = {
     'restriction_reason': '',
     'content': 'fake_message_content',
 }
-message2 = {
-    **message1,
+message_with_forward_info = {
+    **message_base,
     'forward_info': {
         'origin': {},
         'date': 1636692739,
         'from_chat_id': 1,
         'from_message_id': 2,
     },
+}
+message_sender_chat = {
+    **message_base,
+    'sender': {'@type': 'messageSenderChat', 'chat_id': 1394101816},
 }
 
 
@@ -70,14 +74,12 @@ class MessageTestCase(TestCase):
 
     def test_message(self, *args):
         """Построение Message"""
-        message_dict = deepcopy(message1)
+        message_dict = deepcopy(message_base)
 
         message = Message(message_dict)
 
         self.assertEqual(166121701376, message.id)
         self.assertEqual(-1001236427904, message.chat_id)
-        self.assertEqual(MessageSenderType.USER, message.sender.type)
-        self.assertEqual(1394101816, message.sender.id)
         self.assertFalse(message.is_outgoing)
         self.assertIsInstance(message.raw, dict)
         self.assertIsInstance(message.raw['interaction_info'], dict)
@@ -85,7 +87,7 @@ class MessageTestCase(TestCase):
 
     def test_message_with_forward_info(self, *args):
         """Построение Message с ForwardInfo"""
-        message_dict = deepcopy(message2)
+        message_dict = deepcopy(message_with_forward_info)
 
         message = Message(message_dict)
 
@@ -95,3 +97,21 @@ class MessageTestCase(TestCase):
         self.assertEqual(1636692739, message.forward_info.date)
         self.assertEqual(1, message.forward_info.from_chat_id)
         self.assertEqual(2, message.forward_info.from_message_id)
+
+    def test_message_sender_user(self, *args):
+        """Проверка messageSenderUser в Message"""
+        message_dict = deepcopy(message_base)
+
+        message = Message(message_dict)
+
+        self.assertEqual(MessageSenderType.USER, message.sender.type)
+        self.assertEqual(1394101816, message.sender.id)
+
+    def test_message_sender_chat(self, *args):
+        """Проверка messageSenderChat в Message"""
+        message_dict = deepcopy(message_sender_chat)
+
+        message = Message(message_dict)
+
+        self.assertEqual(MessageSenderType.CHAT, message.sender.type)
+        self.assertEqual(1394101816, message.sender.id)

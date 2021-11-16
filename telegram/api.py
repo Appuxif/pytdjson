@@ -1,7 +1,7 @@
 import os
 from typing import TYPE_CHECKING
 
-from .types.message import TextParseModeTypes
+from .types.message_content import TextParseModeTypes
 
 if TYPE_CHECKING:
     from .client import AsyncTelegram

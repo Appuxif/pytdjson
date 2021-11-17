@@ -37,7 +37,7 @@ class MessageAnimationTestCase(TestCase):
     """
 
     def test(self, *args):
-        """"""
+        """Проверка MessageAnimation"""
         content_dict = deepcopy(content_message_animation)
 
         content = MessageContent(content_dict)

@@ -2,11 +2,12 @@ from dataclasses import dataclass
 from enum import Enum
 
 from telegram.types.base import ObjectBuilder
-from telegram.types.files import AnimationFile
+from telegram.types.files import AnimationFile, AudioFile
 
 __all__ = (
     'FormattedText',
     'MessageAnimation',
+    'MessageAudio',
     'MessageContent',
     'MessageText',
     'TextEntity',
@@ -183,11 +184,26 @@ class MessageAnimation:
         self.caption = FormattedText(self.raw.pop('caption'))
 
 
+@dataclass
+class MessageAudio:
+    """Аудио"""
+
+    raw: dict
+
+    audio: AudioFile = None
+    caption: FormattedText = None
+
+    def __post_init__(self):
+        self.audio = AudioFile(self.raw.pop('audio'))
+        self.caption = FormattedText(self.raw.pop('caption'))
+
+
 class MessageContentBuilder(ObjectBuilder):
     """Билдер, возвращает один из MessageContent"""
 
     mapping = {
         'messageAnimation': MessageAnimation,
+        'messageAudio': MessageAudio,
         'messageText': MessageText,
     }
 

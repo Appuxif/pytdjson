@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from telegram.types.base import RawDataclass
 from telegram.types.message_content import MessageContent
 
 __all__ = ('MessageSenderType', 'MessageSender', 'MessageForwardInfo', 'Message')
@@ -14,14 +15,13 @@ class MessageSenderType(Enum):
 
 
 @dataclass
-class MessageSender:
+class MessageSender(RawDataclass):
     """Отправитель сообщения"""
 
-    raw: dict
     type: MessageSenderType = None
     id: int = None
 
-    def __post_init__(self):
+    def _assign_raw(self):
         self.type = MessageSenderType(self.raw.pop('@type'))
         if self.type == MessageSenderType.USER:
             self.id = self.raw.pop('user_id')
@@ -30,25 +30,17 @@ class MessageSender:
 
 
 @dataclass
-class MessageForwardInfo:
+class MessageForwardInfo(RawDataclass):
     """Информация об внутреннем отправителе сообщения"""
 
-    raw: dict
     date: int = None
     from_chat_id: int = None
     from_message_id: int = None
 
-    def __post_init__(self):
-        self.date = self.raw.pop('date')
-        self.from_chat_id = self.raw.pop('from_chat_id')
-        self.from_message_id = self.raw.pop('from_message_id')
-
 
 @dataclass
-class Message:
+class Message(RawDataclass):
     """Сообщение из обновления телеграм"""
-
-    raw: dict
 
     id: int = None
     chat_id: int = None
@@ -72,16 +64,9 @@ class Message:
     content: MessageContent = None
     reply_markup: dict = None
 
-    def __post_init__(self):
+    def _assign_raw(self):
         self.sender = MessageSender(self.raw.pop('sender'))
         forward_info = self.raw.pop('forward_info', None)
         if forward_info:
             self.forward_info = MessageForwardInfo(forward_info)
         self.content = MessageContent(self.raw.pop('content'))
-
-        keys = self.raw.keys()
-        keys = list(keys)
-        for key in keys:
-            if hasattr(self, key):
-                value = self.raw.pop(key)
-                setattr(self, key, value)

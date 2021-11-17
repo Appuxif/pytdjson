@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from .base import ObjectBuilder
+from .base import ObjectBuilder, RawDataclass
 from .files import File
 from .message import Message
 
@@ -32,30 +32,27 @@ class AuthorizationState(Enum):
 
 
 @dataclass
-class UpdateAuthorizationState:
-    raw: dict
+class UpdateAuthorizationState(RawDataclass):
     authorization_state: AuthorizationState = None
 
-    def __post_init__(self):
+    def _assign_raw(self):
         authorization_state = self.raw['authorization_state'].pop('@type')
         self.authorization_state = AuthorizationState(authorization_state)
 
 
 @dataclass
-class UpdateNewMessage:
-    raw: dict
+class UpdateNewMessage(RawDataclass):
     message: Message = None
 
-    def __post_init__(self):
+    def _assign_raw(self):
         self.message = Message(self.raw.pop('message'))
 
 
 @dataclass
-class UpdateFile:
-    raw: dict
+class UpdateFile(RawDataclass):
     file: File = None
 
-    def __post_init__(self):
+    def _assign_raw(self):
         self.file = File(self.raw.pop('file'))
 
 

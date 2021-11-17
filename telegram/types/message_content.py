@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from telegram.types.base import ObjectBuilder
+from telegram.types.base import ObjectBuilder, RawDataclass
 from telegram.types.files import AnimationFile, AudioFile
 
 __all__ = (
@@ -45,10 +45,8 @@ class TextEntityType(Enum):
 
 
 @dataclass
-class TextEntity:
+class TextEntity(RawDataclass):
     """Элемент форматирования текста"""
-
-    raw: dict
 
     offset: int = None
     length: int = None
@@ -57,9 +55,7 @@ class TextEntity:
     language: str = None
     url: str = None
 
-    def __post_init__(self):
-        self.offset = self.raw.pop('offset')
-        self.length = self.raw.pop('length')
+    def _assign_raw(self):
         _type = self.raw['type']
         self.type = TextEntityType(_type.pop('@type'))
         if self.type == TextEntityType.MENTION_NAME:
@@ -71,17 +67,17 @@ class TextEntity:
 
 
 @dataclass
-class FormattedText:
+class FormattedText(RawDataclass):
     """Форматированный текст"""
-
-    raw: dict
 
     text: str = None
     entities: [TextEntity] = None
 
-    def __post_init__(self):
-        self.text = self.raw.pop('text')
+    def _assign_raw(self):
         self.entities = [TextEntity(entity) for entity in self.raw.pop('entities')]
+
+    # def __post_init__(self):
+    #     self.text = self.raw.pop('text')
 
 
 class MessageContentType(Enum):
@@ -159,41 +155,35 @@ class MessageContentType(Enum):
 
 
 @dataclass
-class MessageText:
+class MessageText(RawDataclass):
     """Текстовое сообщение"""
-
-    raw: dict
 
     text: FormattedText = None
 
-    def __post_init__(self):
+    def _assign_raw(self):
         self.text = FormattedText(self.raw.pop('text'))
 
 
 @dataclass
-class MessageAnimation:
+class MessageAnimation(RawDataclass):
     """Анимация"""
-
-    raw: dict
 
     animation: AnimationFile = None
     caption: FormattedText = None
 
-    def __post_init__(self):
+    def _assign_raw(self):
         self.animation = AnimationFile(self.raw.pop('animation'))
         self.caption = FormattedText(self.raw.pop('caption'))
 
 
 @dataclass
-class MessageAudio:
+class MessageAudio(RawDataclass):
     """Аудио"""
-
-    raw: dict
 
     audio: AudioFile = None
     caption: FormattedText = None
 
-    def __post_init__(self):
+    def _assign_raw(self):
         self.audio = AudioFile(self.raw.pop('audio'))
         self.caption = FormattedText(self.raw.pop('caption'))
 

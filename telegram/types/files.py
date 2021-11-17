@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 
+from telegram.types.base import RawDataclass
+
 
 @dataclass
-class File:
+class File(RawDataclass):
     """Файл"""
-
-    raw: dict
 
     id: int = None
     size: int = None
@@ -14,22 +14,15 @@ class File:
     remote_id: int = None
     remote_unique_id: int = None
 
-    def __post_init__(self):
-        self.id = self.raw.pop('id')
-        self.size = self.raw.pop('size')
-        self.expected_size = self.raw.pop('expected_size')
-
+    def _assign_raw(self):
         self.local_path = self.raw['local'].pop('path')
-
         self.remote_id = self.raw['remote'].pop('id')
         self.remote_unique_id = self.raw['remote'].pop('unique_id')
 
 
 @dataclass
-class AnimationFile:
+class AnimationFile(RawDataclass):
     """Анимация"""
-
-    raw: dict
 
     duration: int = None
     width: int = None
@@ -39,21 +32,13 @@ class AnimationFile:
     has_stickers: bool = None
     animation: File = None
 
-    def __post_init__(self):
-        self.duration = self.raw.pop('duration')
-        self.width = self.raw.pop('width')
-        self.height = self.raw.pop('height')
-        self.file_name = self.raw.pop('file_name')
-        self.mime_type = self.raw.pop('mime_type')
-        self.has_stickers = self.raw.pop('has_stickers')
+    def _assign_raw(self):
         self.animation = File(self.raw.pop('animation'))
 
 
 @dataclass
-class AudioFile:
+class AudioFile(RawDataclass):
     """Аудио"""
-
-    raw: dict
 
     duration: int = None
     title: str = None
@@ -62,10 +47,5 @@ class AudioFile:
     mime_type: str = None
     audio: File = None
 
-    def __post_init__(self):
-        self.duration = self.raw.pop('duration')
-        self.title = self.raw.pop('title')
-        self.performer = self.raw.pop('performer')
-        self.file_name = self.raw.pop('file_name')
-        self.mime_type = self.raw.pop('mime_type')
+    def _assign_raw(self):
         self.audio = File(self.raw.pop('audio'))

@@ -1,6 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch
 
+from telegram.types.base import RawDataclass
 from telegram.types.files import File
 from telegram.types.update import (
     AuthorizationState,
@@ -17,11 +18,13 @@ class UpdateTestCase(TestCase):
     """
 
     def test_not_valid_update(self):
-        """Обновление не валидно"""
+        """Неизвестный объект возвращает RawDataclass"""
         update_dict = {'@type': 'notValidUpdate'}
 
-        with self.assertRaises(KeyError):
-            Update(update_dict)
+        update = Update(update_dict)
+
+        self.assertIsInstance(update, RawDataclass)
+        self.assertDictEqual(update.raw, update_dict)
 
     @patch('telegram.types.update.Message', return_value='fake_message_obj')
     def test_update_new_message(self, *args):

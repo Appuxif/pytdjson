@@ -1,7 +1,7 @@
 import os
 from typing import TYPE_CHECKING
 
-from .types.message_content import TextParseModeTypes
+from .types.text import TextParseMode
 
 if TYPE_CHECKING:
     from .client import AsyncTelegram
@@ -290,7 +290,7 @@ class API(BaseAPI):
         self,
         chat_id: int,
         text: str = None,
-        parse_mode: TextParseModeTypes = None,
+        parse_mode: TextParseMode = None,
         disable_web_page_preview: bool = True,
         reply_to_message_id: int = 0,
     ):
@@ -317,12 +317,12 @@ class API(BaseAPI):
             input_message_content=input_message_content,
         )
 
-    def parse_text_entities(self, text: str, parse_mode: TextParseModeTypes):
+    def parse_text_entities(self, text: str, parse_mode: TextParseMode):
         """Синхронный оффлайн запрос на парсинг текста"""
         return self.send_data_sync(
             'parseTextEntities',
             text=text,
-            parse_mode=parse_mode.value,
+            parse_mode={'@type': parse_mode.value, 'version': 2},
         )
 
     def resend_messages(self, chat_id: int, message_ids: list):

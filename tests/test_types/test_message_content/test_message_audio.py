@@ -43,6 +43,6 @@ class MessageAudioTestCase(TestCase):
 
         self.assertIsInstance(content, MessageAudio)
         self.assertEqual(content.audio.duration, 10)
-        self.assertEqual(content.audio.title, 10)
+        self.assertEqual(content.audio.title, 'title')
         self.assertEqual(content.audio.file_name, 'file_name')
         self.assertEqual(content.audio.audio, 'fake-audio-file')

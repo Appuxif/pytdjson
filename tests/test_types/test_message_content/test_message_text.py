@@ -1,13 +1,8 @@
 from copy import deepcopy
 from unittest import TestCase
 
-from telegram.types.message_content import (
-    FormattedText,
-    MessageContent,
-    MessageText,
-    TextEntity,
-    TextEntityType,
-)
+from telegram.types.message_content import MessageContent, MessageText
+from telegram.types.text import FormattedText, TextEntity, TextEntityType
 
 content_message_text = {
     '@type': 'messageText',

@@ -6,9 +6,15 @@
 
 > pip install https://github.com/Appuxif/pytdjson/archive/master.zip  
 
-or  
+или 
 
 > pip install git+https://github.com/Appuxif/pytdjson/
+
+## Tests
+
+Запуск тестов
+
+> python -m unittest discover -s tests
 
 ## Example
 

@@ -10,6 +10,7 @@ from uuid import uuid4
 from . import VERSION
 from .api import API, AuthAPI
 from .tdjson import TDJson
+from .types.update import AuthorizationState, Update, UpdateAuthorizationState
 from .utils import Result
 
 MESSAGE_HANDLER_TYPE: str = 'updateNewMessage'
@@ -164,15 +165,13 @@ class AsyncTelegram:
             handler, update = await self.handler_workers_queue.get()
 
             try:
+                update = Update(update)
                 result = handler(update)
                 if asyncio.iscoroutine(result):
                     await result
-
-            except Exception as e:
-                raise e
-
             finally:
                 self.handler_workers_queue.task_done()
+
             await asyncio.sleep(0.1)
 
     async def _update_async_result(self, update: Dict[Any, Any]) -> None:
@@ -262,29 +261,26 @@ class Authorization:
 
         self.authorization_states_mapping = {
             None: self.api.get_authorization_state,
-            'authorizationStateWaitTdlibParameters': self.api.set_tdlib_parameters,
-            'authorizationStateWaitEncryptionKey': self.api.check_database_encryption_key,
-            'authorizationStateWaitPhoneNumber': self.set_phone_number_or_bot_token,
-            'authorizationStateWaitCode': self.api.check_authentication_code,
-            'authorizationStateWaitRegistration': self.api.register_user,
-            'authorizationStateWaitPassword': self.api.check_authentication_password,
-            'authorizationStateReady': self.complete_authorization,
-            'authorizationStateLoggingOut': self.client.api.log_out,
-            'authorizationStateClosing': self.api.get_authorization_state,
-            'authorizationStateClosed': self.kill_client,
+            AuthorizationState.WAIT_TDLIB_PARAMETERS: self.api.set_tdlib_parameters,
+            AuthorizationState.WAIT_ENCRYPTION_KEY: self.api.check_database_encryption_key,
+            AuthorizationState.WAIT_PHONE_NUMBER: self.set_phone_number_or_bot_token,
+            AuthorizationState.WAIT_CODE: self.api.check_authentication_code,
+            AuthorizationState.WAIT_REGISTRATION: self.api.register_user,
+            AuthorizationState.WAIT_PASSWORD: self.api.check_authentication_password,
+            AuthorizationState.READY: self.complete_authorization,
+            AuthorizationState.LOGGING_OUT: self.client.api.log_out,
+            AuthorizationState.CLOSING: self.api.get_authorization_state,
+            AuthorizationState.CLOSED: self.kill_client,
         }
 
         self.authorized = False
         self.state = None
 
-    async def authorization_state_handler(self, update):
+    async def authorization_state_handler(self, update: UpdateAuthorizationState):
         if not self.client.is_enabled:
             return
 
-        try:
-            self.state = update['authorization_state']['@type']
-        except KeyError:
-            self.state = update['@type']
+        self.state = update.authorization_state
         self.client.logger.debug(f'authorization state received: {self.state}')
 
         method = self.authorization_states_mapping[self.state]
@@ -335,7 +331,7 @@ class Authorization:
         self.client.stop()
         return Result({}, {})
 
-    async def kill_client(self) -> Result:
+    def kill_client(self) -> Result:
         result = self.client.api.close()
         self.client.kill()
         return result

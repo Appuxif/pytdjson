@@ -17,6 +17,9 @@ class Result:
         self.ok_received = False
         self.error_received = False
 
+        if update is None:
+            return
+
         if update.get('@type') == 'error':
             self.error_received = True
         else:

@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from typing import Any, Callable, Dict
 
@@ -14,22 +15,35 @@ class RawDataclass:
     Метод ._assign_raw используется в дочернем классе, чтобы
     вручную определить атрибуты по более сложной логике перед
     автоматическим определением
+
+    Метод .as_json возвращает текстовое представление объекта в формате JSON
     """
 
     raw: dict
 
     def __post_init__(self):
+
         self._assign_raw()
 
         keys = self.raw.keys()
         keys = list(keys)
         for key in keys:
             if hasattr(self, key) and getattr(self, key, None) is None:
-                value = self.raw.pop(key)
+                value = self.raw[key]
                 setattr(self, key, value)
 
     def _assign_raw(self):
         pass
+
+    def to_json(self):
+        """Сериализация исходного словаря в JSON формат"""
+        return json.dumps(self.raw, ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, data: str):
+        """Десериализация из JSON формата"""
+        data_dict = json.loads(data)
+        return cls(data_dict)
 
 
 class ObjectBuilder:

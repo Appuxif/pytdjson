@@ -22,11 +22,11 @@ class MessageSender(RawDataclass):
     id: int = None
 
     def _assign_raw(self):
-        self.type = MessageSenderType(self.raw.pop('@type'))
+        self.type = MessageSenderType(self.raw['@type'])
         if self.type == MessageSenderType.USER:
-            self.id = self.raw.pop('user_id')
+            self.id = self.raw['user_id']
         else:
-            self.id = self.raw.pop('chat_id')
+            self.id = self.raw['chat_id']
 
 
 @dataclass
@@ -65,8 +65,8 @@ class Message(RawDataclass):
     reply_markup: dict = None
 
     def _assign_raw(self):
-        self.sender = MessageSender(self.raw.pop('sender'))
-        forward_info = self.raw.pop('forward_info', None)
+        self.sender = MessageSender(self.raw['sender'])
+        forward_info = self.raw.get('forward_info', None)
         if forward_info:
             self.forward_info = MessageForwardInfo(forward_info)
-        self.content = MessageContent(self.raw.pop('content'))
+        self.content = MessageContent(self.raw['content'])

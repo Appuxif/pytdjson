@@ -15,9 +15,9 @@ class File(RawDataclass):
     remote_unique_id: int = None
 
     def _assign_raw(self):
-        self.local_path = self.raw['local'].pop('path')
-        self.remote_id = self.raw['remote'].pop('id')
-        self.remote_unique_id = self.raw['remote'].pop('unique_id')
+        self.local_path = self.raw['local']['path']
+        self.remote_id = self.raw['remote']['id']
+        self.remote_unique_id = self.raw['remote']['unique_id']
 
 
 @dataclass
@@ -33,7 +33,7 @@ class AnimationFile(RawDataclass):
     animation: File = None
 
     def _assign_raw(self):
-        self.animation = File(self.raw.pop('animation'))
+        self.animation = File(self.raw['animation'])
 
 
 @dataclass
@@ -48,4 +48,4 @@ class AudioFile(RawDataclass):
     audio: File = None
 
     def _assign_raw(self):
-        self.audio = File(self.raw.pop('audio'))
+        self.audio = File(self.raw['audio'])

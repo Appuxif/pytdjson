@@ -39,13 +39,13 @@ class TextEntity(RawDataclass):
 
     def _assign_raw(self):
         _type = self.raw['type']
-        self.type = TextEntityType(_type.pop('@type'))
+        self.type = TextEntityType(_type['@type'])
         if self.type == TextEntityType.MENTION_NAME:
-            self.user_id = _type.pop('user_id')
+            self.user_id = _type['user_id']
         elif self.type == TextEntityType.PRE_CODE:
-            self.language = _type.pop('language')
+            self.language = _type['language']
         elif self.type == TextEntityType.TEXT_URL:
-            self.url = _type.pop('url')
+            self.url = _type['url']
 
 
 @dataclass
@@ -56,7 +56,7 @@ class FormattedText(RawDataclass):
     entities: [TextEntity] = None
 
     def _assign_raw(self):
-        self.entities = [TextEntity(entity) for entity in self.raw.pop('entities')]
+        self.entities = [TextEntity(entity) for entity in self.raw['entities']]
 
 
 class TextParseMode(Enum):

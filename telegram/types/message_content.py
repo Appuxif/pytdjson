@@ -37,7 +37,7 @@ class MessageText(MessageContentBase):
     text: FormattedText = None
 
     def _assign_raw(self):
-        self.text = FormattedText(self.raw.pop('text'))
+        self.text = FormattedText(self.raw['text'])
 
 
 @dataclass
@@ -48,8 +48,8 @@ class MessageAnimation(MessageContentBase):
     caption: FormattedText = None
 
     def _assign_raw(self):
-        self.animation = AnimationFile(self.raw.pop('animation'))
-        self.caption = FormattedText(self.raw.pop('caption'))
+        self.animation = AnimationFile(self.raw['animation'])
+        self.caption = FormattedText(self.raw['caption'])
 
 
 @dataclass
@@ -60,8 +60,8 @@ class MessageAudio(MessageContentBase):
     caption: FormattedText = None
 
     def _assign_raw(self):
-        self.audio = AudioFile(self.raw.pop('audio'))
-        self.caption = FormattedText(self.raw.pop('caption'))
+        self.audio = AudioFile(self.raw['audio'])
+        self.caption = FormattedText(self.raw['caption'])
 
 
 @dataclass

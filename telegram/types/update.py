@@ -36,7 +36,7 @@ class UpdateAuthorizationState(RawDataclass):
     authorization_state: AuthorizationState = None
 
     def _assign_raw(self):
-        authorization_state = self.raw['authorization_state'].pop('@type')
+        authorization_state = self.raw['authorization_state']['@type']
         self.authorization_state = AuthorizationState(authorization_state)
 
 
@@ -45,7 +45,7 @@ class UpdateNewMessage(RawDataclass):
     message: Message = None
 
     def _assign_raw(self):
-        self.message = Message(self.raw.pop('message'))
+        self.message = Message(self.raw['message'])
 
 
 @dataclass
@@ -53,7 +53,7 @@ class UpdateFile(RawDataclass):
     file: File = None
 
     def _assign_raw(self):
-        self.file = File(self.raw.pop('file'))
+        self.file = File(self.raw['file'])
 
 
 class UpdateBuilder(ObjectBuilder):

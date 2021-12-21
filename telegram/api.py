@@ -303,7 +303,8 @@ class API(BaseAPI):
         formatted_text = {'@type': 'formattedText', 'text': text}
 
         if parse_mode is not None:
-            formatted_text = self.parse_text_entities(text, parse_mode)
+            result = self.parse_text_entities(text, parse_mode)
+            formatted_text = result.update
 
         input_message_content = {
             '@type': 'inputMessageText',

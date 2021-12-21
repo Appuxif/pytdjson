@@ -191,7 +191,7 @@ class AsyncTelegram:
         self,
         data: Dict[Any, Any],
         request_id: Optional[str] = None,
-        timeout: Optional[int] = 5,
+        timeout: Optional[int] = 10,
     ) -> Result:
 
         data.setdefault('@extra', {})
@@ -212,7 +212,9 @@ class AsyncTelegram:
         return Result(data, update, request_id=request_id)
 
     async def _get_update(
-        self, request_id: Optional[str] = None, timeout=5
+        self,
+        request_id: Optional[str] = None,
+        timeout: int = 10,
     ) -> Dict[Any, Any]:
         loop = asyncio.get_running_loop()
         timer = loop.time()

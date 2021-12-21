@@ -62,7 +62,6 @@ class FormattedText(RawDataclass):
 class TextParseMode(Enum):
     """Типы парсинга текстов через tdlib"""
 
-    # HTML = {'@type': 'textParseModeHTML'}
     HTML = 'textParseModeHTML'
-    # MARKDOWN = {'@type': 'textParseModeMarkdown', 'version': 2}
     MARKDOWN = 'textParseModeMarkdown'
+    NONE = None

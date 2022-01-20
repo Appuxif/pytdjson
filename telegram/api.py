@@ -304,6 +304,7 @@ class API(BaseAPI):
 
         if parse_mode is not None or parse_mode is not TextParseMode.NONE:
             result = self.parse_text_entities(text, parse_mode)
+            result.is_valid()
             formatted_text = result.update
 
         input_message_content = {

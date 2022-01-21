@@ -23,6 +23,9 @@ class RawDataclass:
 
     def __post_init__(self):
 
+        if self.raw is None:
+            return
+
         self._assign_raw()
 
         keys = self.raw.keys()

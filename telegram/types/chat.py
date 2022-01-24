@@ -4,7 +4,7 @@ from typing import List
 
 from telegram.types.base import RawDataclass
 from telegram.types.files import File
-from telegram.types.message import Message
+from telegram.types.message import Message, MessageSender, MessageSenderType
 
 
 @dataclass
@@ -38,28 +38,6 @@ class ChatType(Enum):
     PRIVATE = 'chatTypePrivate'
     SECRET = 'chatTypeSecret'
     SUPER_GROUP = 'chatTypeSupergroup'
-
-
-class MessageSenderType(Enum):
-    """Типы отправителя сообщений в чате"""
-
-    CHAT = 'messageSenderChat'
-    USER = 'messageSenderUser'
-
-
-@dataclass
-class MessageSender(RawDataclass):
-    type: MessageSenderType = None
-    id: int = None
-
-    def _assign_raw(self):
-        self.type = MessageSenderType(self.raw['@type'])
-        chat_id = self.raw.get('chat_id')
-        user_id = self.raw.get('user_id')
-        if chat_id is not None:
-            self.id = chat_id
-        elif user_id is not None:
-            self.id = user_id
 
 
 @dataclass

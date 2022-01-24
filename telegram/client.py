@@ -159,13 +159,16 @@ class AsyncTelegram:
                 await self._run_handlers(update)
             await asyncio.sleep(0.1)
 
+    def _prepare_update(self, update: dict):
+        return Update(update)
+
     async def _handlers_worker(self) -> None:
         self.logger.debug('handlers worker starting...')
         while self.is_enabled:
             handler, update = await self.handler_workers_queue.get()
 
             try:
-                update = Update(update)
+                update = self._prepare_update(update)
                 result = handler(update)
                 if asyncio.iscoroutine(result):
                     await result

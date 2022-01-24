@@ -5,7 +5,7 @@ with open('README.md', 'r', encoding='utf-8') as fh:
 
 setuptools.setup(
     name='pytdjson',
-    version='0.2.8',
+    version='0.2.9',
     author='Appuxif',
     author_email='app@mail.com',
     description='A Python package to build Telegram clients using TDLib',

@@ -210,7 +210,7 @@ class AsyncTelegram:
         update = await self._get_update(request_id, timeout=timeout)
         return Result(data, update, request_id=request_id)
 
-    async def send_data_sync(
+    def send_data_sync(
         self, data: Dict[Any, Any], request_id: Optional[str] = None
     ) -> Result:
         data.setdefault('@extra', {})

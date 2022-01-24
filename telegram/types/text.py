@@ -13,6 +13,7 @@ class TextEntityType(Enum):
     CASHTAG = 'textEntityTypeCashtag'
     CODE = 'textEntityTypeCode'
     EMAIL_ADDRESS = 'textEntityTypeEmailAddress'
+    MEDIA_TIMESTAMP = 'textEntityTypeMediaTimestamp'
     HASHTAG = 'textEntityTypeHashtag'
     ITALIC = 'textEntityTypeItalic'
     MENTION = 'textEntityTypeMention'

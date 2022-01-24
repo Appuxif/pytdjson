@@ -13,10 +13,10 @@ class BaseAPI:
     def __init__(self, client: 'AsyncTelegram'):
         self.client = client
 
-    def send_data(self, method, request_id=None, **kwargs):
+    def send_data(self, method, request_id=None, timeout=30, **kwargs):
         """Асинхронный вызов метода"""
         kwargs['@type'] = method
-        return self.client.send_data(kwargs, request_id=request_id)
+        return self.client.send_data(kwargs, request_id=request_id, timeout=timeout)
 
     def send_data_sync(self, method, request_id=None, **kwargs):
         """Синхронный вызов метода"""
@@ -157,6 +157,7 @@ class API(BaseAPI):
         offset_order: int = 0,
         offset_chat_id: int = 0,
         limit: int = 100,
+        chat_list: str = None,
     ):
         """Запрашивает список чатов"""
         return self.send_data(
@@ -164,6 +165,8 @@ class API(BaseAPI):
             offset_order=offset_order,
             offset_chat_id=offset_chat_id,
             limit=limit,
+            chat_list=chat_list,
+            timeout=600,
         )
 
     def get_chat_history(

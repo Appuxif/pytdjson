@@ -76,7 +76,7 @@ class Chat(RawDataclass):
     title: str = None
     photo: ChatPhotoInfo = None
     permissions: ChatPermissions = None
-    message: Message = None
+    last_message: Message = None
     positions: List[dict] = None
     message_sender: MessageSender = None
 
@@ -115,11 +115,15 @@ class Chat(RawDataclass):
             self.supergroup_id = self.raw['type']['supergroup_id']
             self.is_channel = self.raw['type']['is_channel']
 
-        self.photo = ChatPhotoInfo(self.raw['photo'])
+        photo = self.raw.get('photo')
+        if photo:
+            self.photo = ChatPhotoInfo(self.raw['photo'])
         self.permissions = ChatPermissions(self.raw['permissions'])
 
-        message = self.raw.get('message')
-        if message:
-            self.message = Message(message)
+        last_message = self.raw.get('last_message')
+        if last_message:
+            self.last_message = Message(last_message)
 
-        self.message_sender = MessageSender(self.raw['message_sender_id'])
+        message_sender_id = self.raw.get('message_sender_id')
+        if message_sender_id:
+            self.message_sender = MessageSender(self.raw['message_sender_id'])

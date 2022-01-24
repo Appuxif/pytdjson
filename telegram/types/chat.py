@@ -37,7 +37,7 @@ class ChatType(Enum):
     BASIC_GROUP = 'chatTypeBasicGroup'
     PRIVATE = 'chatTypePrivate'
     SECRET = 'chatTypeSecret'
-    SUPER_GROUP = 'chatTypeSuperGroup'
+    SUPER_GROUP = 'chatTypeSupergroup'
 
 
 class MessageSenderType(Enum):

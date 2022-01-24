@@ -59,6 +59,10 @@ class User(RawDataclass):
     language_code: str = None
 
     def _assign_raw(self):
-        self.status = UserStatus(self.raw['status']['@type'])
-        self.profile_photo = ProfilePhoto(self.raw['profile_photo'])
+        status = self.raw.get('status', {}).get('@type')
+        if status:
+            self.status = UserStatus(self.raw['status']['@type'])
+        profile_photo = self.raw.get('profile_photo')
+        if profile_photo:
+            self.profile_photo = ProfilePhoto(self.raw['profile_photo'])
         self.type = UserType(self.raw['type']['@type'])

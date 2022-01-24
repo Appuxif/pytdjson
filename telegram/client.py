@@ -31,6 +31,9 @@ class Settings:
     files_directory: Optional[str] = None
     use_test_dc: bool = False
     use_message_database: bool = True
+    use_file_database: bool = True
+    use_chat_info_database: bool = True
+    enable_storage_optimizer: bool = True
     device_model: str = 'python-telegram'
     application_version: str = VERSION
     system_version: str = 'unknown'
@@ -92,6 +95,8 @@ class AsyncTelegram:
         self.is_enabled = True
         self.create_task(self._tdjson_worker())
         self.create_task(self._handlers_worker())
+        self.create_task(self._handlers_worker())
+        self.create_task(self._handlers_worker())
         self.run_forever()
 
     def run_forever(self):
@@ -150,7 +155,7 @@ class AsyncTelegram:
         self.stop(kill=True)
 
     async def _tdjson_worker(self) -> None:
-        self.logger.debug('tdjson worker starting...')
+        # self.logger.debug('tdjson worker starting...')
         while self.is_enabled:
             update = self._tdjson.receive()
 
@@ -163,7 +168,7 @@ class AsyncTelegram:
         return Update(update)
 
     async def _handlers_worker(self) -> None:
-        self.logger.debug('handlers worker starting...')
+        # self.logger.debug('handlers worker starting...')
         while self.is_enabled:
             handler, update = await self.handler_workers_queue.get()
 
@@ -199,8 +204,8 @@ class AsyncTelegram:
 
         data.setdefault('@extra', {})
         request_id = request_id or data['@extra'].get('request_id') or uuid4().hex
-        self.logger.debug(f'send_data: {request_id} {data}')
         data['@extra']['request_id'] = request_id
+        self.logger.debug(f'send_data: {data}')
         self._tdjson.send(data)
         update = await self._get_update(request_id, timeout=timeout)
         return Result(data, update, request_id=request_id)

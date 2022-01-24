@@ -55,7 +55,10 @@ class AuthAPI(BaseAPI):
             "database_directory": os.path.join(
                 self.client.settings.files_directory, "database"
             ),
+            "use_file_database": self.client.settings.use_file_database,
+            "use_chat_info_database": self.client.settings.use_chat_info_database,
             "use_message_database": self.client.settings.use_message_database,
+            "enable_storage_optimizer": self.client.settings.enable_storage_optimizer,
             "files_directory": os.path.join(
                 self.client.settings.files_directory, "files"
             ),

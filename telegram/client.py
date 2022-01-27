@@ -278,7 +278,7 @@ class Authorization:
             AuthorizationState.WAIT_REGISTRATION: self.api.register_user,
             AuthorizationState.WAIT_PASSWORD: self.api.check_authentication_password,
             AuthorizationState.READY: self.complete_authorization,
-            AuthorizationState.LOGGING_OUT: self.client.api.log_out,
+            AuthorizationState.LOGGING_OUT: self.handle_logging_out,
             AuthorizationState.CLOSING: self.api.get_authorization_state,
             AuthorizationState.CLOSED: self.kill_client,
         }
@@ -341,7 +341,11 @@ class Authorization:
         self.client.stop()
         return Result({}, {})
 
-    def kill_client(self) -> Result:
-        result = self.client.api.close()
+    async def handle_logging_out(self) -> Result:
+        self.client.logger.warning('LOGGING OUT')
+        return Result({}, {})
+
+    async def kill_client(self) -> Result:
+        await self.client.api.close()
         self.client.kill()
-        return result
+        return Result({}, {})

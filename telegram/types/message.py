@@ -62,14 +62,10 @@ class Message(RawDataclass):
 
     sender: Optional[MessageSender] = None
     forward_info: Optional[MessageForwardInfo] = None
-    content: MessageContent = None
+    content: Optional[MessageContent] = None
     reply_markup: dict = None
 
     def _assign_raw(self):
-        sender = self.raw.get('sender', None)
-        if sender:
-            self.sender = MessageSender(sender)
-        forward_info = self.raw.get('forward_info', None)
-        if forward_info:
-            self.forward_info = MessageForwardInfo(forward_info)
-        self.content = MessageContent(self.raw['content'])
+        self._assign_raw_optional('sender', MessageSender)
+        self._assign_raw_optional('forward_info', MessageForwardInfo)
+        self._assign_raw_optional('content', MessageContent)

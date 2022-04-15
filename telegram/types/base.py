@@ -38,6 +38,11 @@ class RawDataclass:
     def _assign_raw(self):
         pass
 
+    def _assign_raw_optional(self, key, field_cls):
+        value = self.raw.get(key, None)
+        if value:
+            setattr(self, key, field_cls(value))
+
     def to_json(self):
         """Сериализация исходного словаря в JSON формат"""
         return json.dumps(self.raw, ensure_ascii=False)

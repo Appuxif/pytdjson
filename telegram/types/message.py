@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import Optional
 
 from telegram.types.base import RawDataclass
 from telegram.types.message_content import MessageContent
@@ -59,13 +60,15 @@ class Message(RawDataclass):
     is_channel_post: bool = None
     contains_unread_mention: bool = None
 
-    sender: MessageSender = None
-    forward_info: MessageForwardInfo = None
+    sender: Optional[MessageSender] = None
+    forward_info: Optional[MessageForwardInfo] = None
     content: MessageContent = None
     reply_markup: dict = None
 
     def _assign_raw(self):
-        self.sender = MessageSender(self.raw['sender'])
+        sender = self.raw.get('sender', None)
+        if sender:
+            self.sender = MessageSender(sender)
         forward_info = self.raw.get('forward_info', None)
         if forward_info:
             self.forward_info = MessageForwardInfo(forward_info)

@@ -82,20 +82,27 @@ def build_variables(cls: Type[RawDataclass], base=None):
             continue
 
         variable = f'{base}.{cls_field.name}'
-        _variables = []
+        _variables = [variable]
 
         if isinstance(cls_field.type, ObjectBuilder):
-            for child_cls in cls_field.type.mapping.values():
-                _variables.append(build_variables(child_cls, variable))
+            _variables = build_variables_for_object_builder(cls_field, variable)
 
         elif isinstance(cls_field.type, type) and issubclass(
             cls_field.type, RawDataclass
         ):
-            _variables.append(build_variables(cls_field.type, variable))
-
-        else:
-            _variables.append(variable)
+            _variables = build_variables(cls_field.type, variable)
 
         variables.extend(_variables)
 
     return variables
+
+
+def build_variables_for_object_builder(cls_field, base):
+    """Пробегается по ObjectBuilder.mapping и объединяет всевозможные поля"""
+    return list(
+        {
+            var
+            for child_cls in cls_field.type.mapping.values()
+            for var in build_variables(child_cls, base)
+        }
+    )

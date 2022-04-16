@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
@@ -60,9 +60,9 @@ class Message(RawDataclass):
     is_channel_post: bool = None
     contains_unread_mention: bool = None
 
-    sender: Optional[MessageSender] = None
-    forward_info: Optional[MessageForwardInfo] = None
-    content: Optional[MessageContent] = None
+    sender: MessageSender = None
+    forward_info: MessageForwardInfo = None
+    content: MessageContent = None
     reply_markup: dict = None
 
     def _assign_raw(self):

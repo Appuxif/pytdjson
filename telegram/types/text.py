@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import List
 
 from telegram.types.base import RawDataclass
 
@@ -54,7 +55,7 @@ class FormattedText(RawDataclass):
     """Форматированный текст"""
 
     text: str = None
-    entities: [TextEntity] = None
+    entities: List[TextEntity] = None
 
     def _assign_raw(self):
         self.entities = [TextEntity(entity) for entity in self.raw['entities']]

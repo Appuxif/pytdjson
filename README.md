@@ -76,4 +76,4 @@ tg.run()
 ## Projects
 Проекты, успешно использующие эту библиотеку  
 
-* [telegramio](https://telegramio.space) - Сервис по автоматизации телеграма
+* [telegramio](https://telegramio.ru) - Сервис по автоматизации телеграма

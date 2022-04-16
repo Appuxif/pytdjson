@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Callable, Dict, Type
 
 
@@ -65,3 +65,34 @@ class ObjectBuilder:
         return self.mapping.get(object_dict[self.key], self.default)(
             object_dict, *args, **kwargs
         )
+
+
+def build_variables(cls: Type[RawDataclass], base=None):
+    """Пробегается по всему дереву вложенных объектов и
+    возвращает список из возможных переменных для доступа к значению
+    через f-strings
+
+    например {message.chat.last_message.sender.id}
+    """
+    variables = []
+    base = base or cls.__name__.lower()
+
+    for cls_field in fields(cls):
+        if not cls_field.repr:
+            continue
+
+        variable = f'{base}.{cls_field.name}'
+        _variables = [variable]
+
+        if isinstance(cls_field.type, ObjectBuilder):
+            for child_cls in cls_field.type.mapping.values():
+                _variables = build_variables(child_cls, variable)
+
+        elif isinstance(cls_field.type, type) and issubclass(
+            cls_field.type, RawDataclass
+        ):
+            _variables = build_variables(cls_field.type, variable)
+
+        variables.extend(_variables)
+
+    return variables

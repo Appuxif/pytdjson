@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Type
+from typing import Callable, Dict, Type
 
 
 @dataclass()

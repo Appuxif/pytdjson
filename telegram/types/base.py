@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Type
 
 
 @dataclass()
@@ -57,7 +57,7 @@ class RawDataclass:
 class ObjectBuilder:
     """Билдер, возвращает инстанс объекта, тип которого находится в маппинге"""
 
-    mapping: Dict[str, Callable[[dict, Any, Any], Any]] = None
+    mapping: Dict[str, Type[RawDataclass]] = None
     key: str = '@type'
     default: Callable = RawDataclass
 

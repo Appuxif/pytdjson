@@ -222,11 +222,12 @@ class API(BaseAPI):
             supergroup_id=supergroup_id,
         )
 
-    def get_message(self, message_id: int):
+    def get_message(self, message_id: int, chat_id: int):
         """Запрос на получение информации о сообщении"""
         return self.send_data(
             'getMessage',
             message_id=message_id,
+            chat_id=chat_id,
         )
 
     def get_callback_query_answer(
@@ -410,4 +411,12 @@ class API(BaseAPI):
         return self.send_data(
             'createPrivateChat',
             user_id=user_id,
+        )
+
+    def get_message_link(self, chat_id: int, message_id: int):
+        """Запрос на генерацию ссылки для сообщения. Работает только для супергрупп"""
+        return self.send_data(
+            'getMessageLink',
+            chat_id=chat_id,
+            message_id=message_id,
         )

@@ -84,6 +84,7 @@ class AsyncTelegram:
         signal.signal(signal.SIGABRT, self._signal_handler)
 
     def _loop_exception_handler(self, loop, context):
+        self.logger.exception(context.get('message'))
         self.stop()
 
     def _signal_handler(self, signum: int, frame: FrameType) -> None:

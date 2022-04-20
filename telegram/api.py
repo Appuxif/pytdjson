@@ -222,6 +222,20 @@ class API(BaseAPI):
             supergroup_id=supergroup_id,
         )
 
+    def get_basic_group(self, basic_group_id: int):
+        """Запрос на получение информации о базовой группе. Оффлайн метод"""
+        return self.send_data(
+            'getBasicGroup',
+            basic_group_id=basic_group_id,
+        )
+
+    def get_basic_group_full_info(self, basic_group_id: int):
+        """Запрос на получение полной информации о базовой группе"""
+        return self.send_data(
+            'getBasicGroupFullInfo',
+            basic_group_id=basic_group_id,
+        )
+
     def get_message(self, message_id: int, chat_id: int):
         """Запрос на получение информации о сообщении"""
         return self.send_data(

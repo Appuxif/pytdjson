@@ -66,3 +66,13 @@ class User(RawDataclass):
         if profile_photo:
             self.profile_photo = ProfilePhoto(self.raw['profile_photo'])
         self.type = UserType(self.raw['type']['@type'])
+
+
+@dataclass
+class UserFullInfo(RawDataclass):
+    """Дополнительная информация о пользователе"""
+
+    is_blocked: bool = None
+    bio: str = None
+    share_text: str = None
+    description: str = None

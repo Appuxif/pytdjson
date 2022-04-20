@@ -4,7 +4,13 @@ from enum import Enum
 from telegram.types.base import RawDataclass
 from telegram.types.message_content import MessageContent
 
-__all__ = ('MessageSenderType', 'MessageSender', 'MessageForwardInfo', 'Message')
+__all__ = (
+    'MessageSenderType',
+    'MessageSender',
+    'MessageForwardInfo',
+    'Message',
+    'MessageLink',
+)
 
 
 class MessageSenderType(Enum):

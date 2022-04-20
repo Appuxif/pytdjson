@@ -1,6 +1,5 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from telegram.types.base import RawDataclass
 from telegram.types.message_content import MessageContent
@@ -69,3 +68,11 @@ class Message(RawDataclass):
         self._assign_raw_optional('sender', MessageSender)
         self._assign_raw_optional('forward_info', MessageForwardInfo)
         self._assign_raw_optional('content', MessageContent)
+
+
+@dataclass
+class MessageLink(RawDataclass):
+    """Ссылка на сообщение"""
+
+    link: str = None
+    is_public: bool = None

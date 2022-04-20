@@ -32,13 +32,16 @@ class RawDataclass:
         keys = list(keys)
         for key in keys:
             if hasattr(self, key) and getattr(self, key, None) is None:
-                value = self.raw[key]
+                key_field = self.__dataclass_fields__.get(key)
+                value_type = key_field.type if key_field else (lambda a: a)
+                value = value_type(self.raw[key])
                 setattr(self, key, value)
 
     def _assign_raw(self):
         pass
 
-    def _assign_raw_optional(self, key, field_cls):
+    def _assign_raw_optional(self, key, field_cls=None):
+        field_cls = field_cls or self.__dataclass_fields__[key].type
         value = self.raw.get(key, None)
         if value:
             setattr(self, key, field_cls(value))

@@ -32,9 +32,6 @@ class AnimationFile(RawDataclass):
     has_stickers: bool = None
     animation: File = None
 
-    def _assign_raw(self):
-        self.animation = File(self.raw['animation'])
-
 
 @dataclass
 class AudioFile(RawDataclass):
@@ -46,6 +43,3 @@ class AudioFile(RawDataclass):
     file_name: str = None
     mime_type: str = None
     audio: File = None
-
-    def _assign_raw(self):
-        self.audio = File(self.raw['audio'])

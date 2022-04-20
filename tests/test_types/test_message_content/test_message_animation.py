@@ -1,7 +1,7 @@
 from copy import deepcopy
 from unittest import TestCase
-from unittest.mock import patch
 
+from telegram.types.files import File
 from telegram.types.message_content import MessageAnimation, MessageContent
 
 content_message_animation = {
@@ -15,7 +15,12 @@ content_message_animation = {
         'has_stickers': True,
         'minithumbnail': 'not-interested',
         'thumbnail': 'not-interested',
-        'animation': 'fake-animation-file',
+        'animation': {
+            'id': 10,
+            'size': 100,
+            'local': {'path': 'test-path'},
+            'remote': {'id': 'test-id', 'unique_id': 'test-unique-id'},
+        },
     },
     'caption': {
         'text': '+79999999999',
@@ -30,13 +35,12 @@ content_message_animation = {
 }
 
 
-@patch('telegram.types.files.File', return_value='fake-animation-file')
 class MessageAnimationTestCase(TestCase):
     """
     Тест кейс для объекта MessageAnimation
     """
 
-    def test(self, *args):
+    def test(self):
         """Проверка MessageAnimation"""
         content_dict = deepcopy(content_message_animation)
 
@@ -47,4 +51,8 @@ class MessageAnimationTestCase(TestCase):
         self.assertEqual(content.animation.width, 20)
         self.assertEqual(content.animation.height, 30)
         self.assertEqual(content.animation.file_name, 'file_name')
-        self.assertEqual(content.animation.animation, 'fake-animation-file')
+        self.assertIsInstance(content.animation.animation, File)
+        self.assertEqual(10, content.animation.animation.id)
+        self.assertEqual(100, content.animation.animation.size)
+        self.assertIsNone(content.animation.animation.expected_size)
+        self.assertEqual('test-path', content.animation.animation.local_path)

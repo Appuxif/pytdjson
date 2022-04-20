@@ -40,16 +40,10 @@ class UpdateAuthorizationState(RawDataclass):
 class UpdateNewMessage(RawDataclass):
     message: Message = None
 
-    def _assign_raw(self):
-        self.message = Message(self.raw['message'])
-
 
 @dataclass
 class UpdateFile(RawDataclass):
     file: File = None
-
-    def _assign_raw(self):
-        self.file = File(self.raw['file'])
 
 
 @dataclass
@@ -58,8 +52,12 @@ class UpdateNewChat(RawDataclass):
 
     chat: Chat = None
 
-    def _assign_raw(self):
-        self.chat = Chat(self.raw['chat'])
+
+@dataclass
+class UpdateUser(RawDataclass):
+    """Обновление с пользователем"""
+
+    user: User = None
 
 
 @dataclass
@@ -69,18 +67,12 @@ class UpdateUserFullInfo(RawDataclass):
     user_id: int = None
     user_full_info: UserFullInfo = None
 
-    def _assign_raw(self):
-        self.user_full_info = UserFullInfo(self.raw['user_full_info'])
-
 
 @dataclass
 class UpdateSupergroup(RawDataclass):
     """Обновление с супергруппой"""
 
     supergroup: Supergroup = None
-
-    def _assign_raw(self):
-        self.supergroup = Supergroup(self.raw['supergroup'])
 
 
 @dataclass
@@ -90,28 +82,12 @@ class UpdateSupergroupFullInfo(RawDataclass):
     supergroup_id: int = None
     supergroup_full_info: SupergroupFullInfo = None
 
-    def _assign_raw(self):
-        self.supergroup_full_info = SupergroupFullInfo(self.raw['supergroup_full_info'])
-
 
 @dataclass
 class UpdateBasicGroup(RawDataclass):
     """Обновление с базовой группой"""
 
     basic_group: BasicGroup = None
-
-    def _assign_raw(self):
-        self.basic_group = BasicGroup(self.raw['basic_group'])
-
-
-@dataclass
-class UpdateUser(RawDataclass):
-    """Обновление с пользователем"""
-
-    user: User = None
-
-    def _assign_raw(self):
-        self.user = User(self.raw['user'])
 
 
 class UpdateBuilder(ObjectBuilder):

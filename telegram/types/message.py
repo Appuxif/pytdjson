@@ -64,11 +64,6 @@ class Message(RawDataclass):
     content: MessageContent = None
     reply_markup: dict = None
 
-    def _assign_raw(self):
-        self._assign_raw_optional('sender', MessageSender)
-        self._assign_raw_optional('forward_info', MessageForwardInfo)
-        self._assign_raw_optional('content', MessageContent)
-
 
 @dataclass
 class MessageLink(RawDataclass):

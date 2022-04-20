@@ -4,19 +4,15 @@ from typing import List
 
 from telegram.types.base import RawDataclass
 from telegram.types.files import File
-from telegram.types.message import Message, MessageSender, MessageSenderType
+from telegram.types.message import Message, MessageSender
 
 
 @dataclass
 class ChatPhotoInfo(RawDataclass):
     small: File = None
     big: File = None
-    minithumbnail = None
+    minithumbnail: dict = None
     has_animation: bool = None
-
-    def _assign_raw(self):
-        self.small = File(self.raw['small'])
-        self.big = File(self.raw['big'])
 
 
 @dataclass
@@ -82,25 +78,20 @@ class Chat(RawDataclass):
 
     def _assign_raw(self):
         self.type = ChatType(self.raw['type']['@type'])
+
         if self.type == ChatType.BASIC_GROUP:
             self.basic_group_id = self.raw['type']['basic_group_id']
+
         elif self.type == ChatType.PRIVATE:
             self.user_id = self.raw['type']['user_id']
+
         elif self.type == ChatType.SECRET:
             self.secret_chat_id = self.raw['type']['secret_chat_id']
             self.user_id = self.raw['type']['user_id']
+
         elif self.type == ChatType.SUPER_GROUP:
             self.supergroup_id = self.raw['type']['supergroup_id']
             self.is_channel = self.raw['type']['is_channel']
-
-        photo = self.raw.get('photo')
-        if photo:
-            self.photo = ChatPhotoInfo(self.raw['photo'])
-        self.permissions = ChatPermissions(self.raw['permissions'])
-
-        last_message = self.raw.get('last_message')
-        if last_message:
-            self.last_message = Message(last_message)
 
         message_sender_id = self.raw.get('message_sender_id')
         if message_sender_id:

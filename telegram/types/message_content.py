@@ -4,26 +4,6 @@ from telegram.types.base import ObjectBuilder, RawDataclass
 from telegram.types.files import AnimationFile, AudioFile
 from telegram.types.text import FormattedText
 
-__all__ = (
-    'MessageContentBase',
-    'MessageContentBuilder',
-    'MessageAnimation',
-    'MessageAudio',
-    'MessageContact',
-    'MessageContent',
-    'MessageDocument',
-    'MessageInvoice',
-    'MessageLocation',
-    'MessagePhoto',
-    'MessagePoll',
-    'MessageText',
-    'MessageUnsupported',
-    'MessageVenue',
-    'MessageVideo',
-    'MessageVideoNote',
-    'MessageVoiceNote',
-)
-
 
 @dataclass
 class MessageContentBase(RawDataclass):
@@ -36,9 +16,6 @@ class MessageText(MessageContentBase):
 
     text: FormattedText = None
 
-    def _assign_raw(self):
-        self.text = FormattedText(self.raw['text'])
-
 
 @dataclass
 class MessageAnimation(MessageContentBase):
@@ -47,10 +24,6 @@ class MessageAnimation(MessageContentBase):
     animation: AnimationFile = None
     caption: FormattedText = None
 
-    def _assign_raw(self):
-        self.animation = AnimationFile(self.raw['animation'])
-        self.caption = FormattedText(self.raw['caption'])
-
 
 @dataclass
 class MessageAudio(MessageContentBase):
@@ -58,10 +31,6 @@ class MessageAudio(MessageContentBase):
 
     audio: AudioFile = None
     caption: FormattedText = None
-
-    def _assign_raw(self):
-        self.audio = AudioFile(self.raw['audio'])
-        self.caption = FormattedText(self.raw['caption'])
 
 
 @dataclass

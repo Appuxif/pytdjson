@@ -24,10 +24,6 @@ class ProfilePhoto(RawDataclass):
     minithumbnail = None
     has_animation: bool = None
 
-    def _assign_raw(self):
-        self.small = File(self.raw['small'])
-        self.big = File(self.raw['big'])
-
 
 class UserType(Enum):
     """Типы пользователей"""
@@ -61,10 +57,10 @@ class User(RawDataclass):
     def _assign_raw(self):
         status = self.raw.get('status', {}).get('@type')
         if status:
-            self.status = UserStatus(self.raw['status']['@type'])
+            self.status = UserStatus(status)
         profile_photo = self.raw.get('profile_photo')
         if profile_photo:
-            self.profile_photo = ProfilePhoto(self.raw['profile_photo'])
+            self.profile_photo = ProfilePhoto(profile_photo)
         self.type = UserType(self.raw['type']['@type'])
 
 

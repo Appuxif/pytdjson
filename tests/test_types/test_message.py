@@ -1,8 +1,8 @@
 from copy import deepcopy
 from unittest import TestCase
-from unittest.mock import patch
 
 from telegram.types.message import Message, MessageForwardInfo, MessageSenderType
+from telegram.types.message_content import MessageText
 
 message_base = {
     '@type': 'message',
@@ -43,7 +43,7 @@ message_base = {
     'author_signature': '',
     'media_album_id': '0',
     'restriction_reason': '',
-    'content': 'fake_message_content',
+    'content': {'@type': 'fake-message-content'},
 }
 message_with_forward_info = {
     **message_base,
@@ -60,19 +60,12 @@ message_sender_chat = {
 }
 
 
-patch_build_message_content = patch(
-    target='telegram.types.message.MessageContent',
-    return_value='fake_message_content',
-)
-
-
-@patch_build_message_content
 class MessageTestCase(TestCase):
     """
     Тест кейс для объекта Message
     """
 
-    def test_message(self, *args):
+    def test_message(self):
         """Построение Message"""
         message_dict = deepcopy(message_base)
 
@@ -83,9 +76,28 @@ class MessageTestCase(TestCase):
         self.assertFalse(message.is_outgoing)
         self.assertIsInstance(message.raw, dict)
         self.assertIsInstance(message.raw['interaction_info'], dict)
-        self.assertEqual(message.content, 'fake_message_content')
+        self.assertEqual(message.content.raw['@type'], 'fake-message-content')
 
-    def test_message_with_forward_info(self, *args):
+    def test_message_with_content(self):
+        """Построение Message"""
+        message_dict = deepcopy(message_base)
+        message_dict['content'] = {
+            '@type': 'messageText',
+            'text': {
+                '@type': 'formattedText',
+                'text': 'test-text',
+                'entities': [],
+            },
+        }
+
+        message = Message(message_dict)
+
+        self.assertIsInstance(message.content, MessageText)
+        self.assertEqual('messageText', message.content.raw['@type'])
+        self.assertEqual('test-text', message.content.text.text)
+        self.assertListEqual([], message.content.text.entities)
+
+    def test_message_with_forward_info(self):
         """Построение Message с ForwardInfo"""
         message_dict = deepcopy(message_with_forward_info)
 
@@ -98,7 +110,7 @@ class MessageTestCase(TestCase):
         self.assertEqual(1, message.forward_info.from_chat_id)
         self.assertEqual(2, message.forward_info.from_message_id)
 
-    def test_message_sender_user(self, *args):
+    def test_message_sender_user(self):
         """Проверка messageSenderUser в Message"""
         message_dict = deepcopy(message_base)
 
@@ -107,7 +119,7 @@ class MessageTestCase(TestCase):
         self.assertEqual(MessageSenderType.USER, message.sender.type)
         self.assertEqual(1394101816, message.sender.id)
 
-    def test_message_sender_chat(self, *args):
+    def test_message_sender_chat(self):
         """Проверка messageSenderChat в Message"""
         message_dict = deepcopy(message_sender_chat)
 

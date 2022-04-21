@@ -1,5 +1,6 @@
 import json
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, asdict
+from enum import Enum
 from typing import Callable, Dict, Type
 
 
@@ -56,6 +57,9 @@ class RawDataclass:
         data_dict = json.loads(data)
         return cls(data_dict)
 
+    def asdict(self):
+        return asdict(self, dict_factory=dict_factory)
+
 
 class ObjectBuilder:
     """Билдер, возвращает инстанс объекта, тип которого находится в маппинге"""
@@ -109,3 +113,12 @@ def build_variables_for_object_builder(cls_field, base):
             for var in build_variables(child_cls, base)
         }
     )
+
+
+def dict_factory(values: list):
+
+    for value in values:
+        if isinstance(value[1], Enum):
+            value[1] = str(value[1])
+
+    return dict(values)

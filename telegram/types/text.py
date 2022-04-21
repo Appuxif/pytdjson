@@ -55,7 +55,7 @@ class FormattedText(RawDataclass):
     """Форматированный текст"""
 
     text: str = None
-    entities: list[TextEntity] = None
+    entities: List[TextEntity] = None
 
     def _assign_raw(self):
         self.entities = [TextEntity(entity) for entity in self.raw['entities']]

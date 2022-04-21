@@ -116,9 +116,10 @@ def build_variables_for_object_builder(cls_field, base):
 
 
 def dict_factory(values: list):
+    values = list(values)
 
-    for value in values:
+    for i, value in enumerate(values):
         if isinstance(value[1], Enum):
-            value[1] = str(value[1])
+            values[i] = [value[0], str(value[1])]
 
     return dict(values)

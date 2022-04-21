@@ -51,7 +51,7 @@ class Chat(RawDataclass):
     photo: ChatPhotoInfo = None
     permissions: ChatPermissions = None
     last_message: Message = None
-    positions: List[dict] = None
+    positions: list = None
     message_sender: MessageSender = None
 
     has_protected_content: bool = None

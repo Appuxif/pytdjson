@@ -84,7 +84,8 @@ class AsyncTelegram:
         signal.signal(signal.SIGABRT, self._signal_handler)
 
     def _loop_exception_handler(self, loop, context):
-        self.logger.exception(context.get('message'))
+        if not isinstance(context.get('exception'), asyncio.exceptions.CancelledError):
+            self.logger.exception(context.get('message'))
         self.stop()
 
     def _signal_handler(self, signum: int, frame: FrameType) -> None:
@@ -118,7 +119,11 @@ class AsyncTelegram:
     def create_task(self, coro):
         self.logger.debug(f'created task: {coro.__name__}')
         task = self._loop.create_task(coro)
-        task.add_done_callback(lambda t: t.result())
+
+        def handler(t):
+            t.result()
+
+        task.add_done_callback(handler)
         self._loop_tasks.append(task)
 
     def cancel_tasks(self):

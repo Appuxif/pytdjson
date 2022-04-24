@@ -169,6 +169,16 @@ class API(BaseAPI):
             timeout=600,
         )
 
+    def load_chats(self, limit: int = 10, chat_list: str = None):
+        """Запрашивает загрузку чатов. Чаты будут приходить
+        отдельными обновлениями через updateNewChat
+        """
+        return self.send_data(
+            'loadChats',
+            limit=limit,
+            chat_list=chat_list,
+        )
+
     def get_chat_history(
         self,
         chat_id: int,

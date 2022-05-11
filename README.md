@@ -111,3 +111,8 @@ tg.run()
 Projects, using that library  
 
 * [telegramio](https://telegramio.ru) - Telegram authomatizations
+
+
+# Contributing
+
+[Look at CONTRIBUTING.md](CONTRIBUTING.md)

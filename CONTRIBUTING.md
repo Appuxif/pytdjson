@@ -11,6 +11,8 @@ Thank you for considering contributing to pytdjson.
 * Simply search all TODOs in the project and try to make a Pull Request for it.
 * Build libtdjson.so source librarires for many OS
 * Ask a questions and make Issues
+* Show you own use cases
+* Start documentation
 
 # How to report a bug
 

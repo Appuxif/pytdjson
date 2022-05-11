@@ -43,3 +43,12 @@ class AudioFile(RawDataclass):
     file_name: str = None
     mime_type: str = None
     audio: File = None
+
+
+@dataclass
+class DocumentFile(RawDataclass):
+    """Документ"""
+
+    file_name: str = None
+    mime_type: str = None
+    document: File = None

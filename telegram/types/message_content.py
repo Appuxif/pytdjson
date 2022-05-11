@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from telegram.types.base import ObjectBuilder, RawDataclass
-from telegram.types.files import AnimationFile, AudioFile
+from telegram.types.files import AnimationFile, AudioFile, DocumentFile
 from telegram.types.text import FormattedText
 
 
@@ -35,7 +35,10 @@ class MessageAudio(MessageContentBase):
 
 @dataclass
 class MessageDocument(MessageContentBase):
-    """TODO: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_document.html"""
+    """Документ"""
+
+    document: DocumentFile = None
+    caption: FormattedText = None
 
 
 @dataclass

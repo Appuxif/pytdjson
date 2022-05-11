@@ -2,7 +2,7 @@
 
 Want to contribute? You can help a simple python library
 for building telegram clients to be more powerful than it is.
-You can simply review a single Pull Request - it a big help for us!
+You can simply review a single Pull Request - it is a big help for us!
 
 Thank you for considering contributing to pytdjson.
 

@@ -324,6 +324,9 @@ class API(BaseAPI):
         parse_mode: TextParseMode = None,
         disable_web_page_preview: bool = True,
         reply_to_message_id: int = 0,
+        disable_notification: bool = None,
+        from_background: bool = None,
+        send_date: int = None,
     ):
         """Sends a message to a chat.
         The chat must be in the tdlib's database.
@@ -343,11 +346,17 @@ class API(BaseAPI):
             'text': formatted_text,
             'disable_web_page_preview': disable_web_page_preview,
         }
+
         return self.send_data(
             'sendMessage',
             chat_id=chat_id,
             reply_to_message_id=reply_to_message_id,
             input_message_content=input_message_content,
+            options=_get_send_message_options(
+                disable_notification,
+                from_background,
+                send_date,
+            ),
         )
 
     def parse_text_entities(self, text: str, parse_mode: TextParseMode):
@@ -375,13 +384,26 @@ class API(BaseAPI):
             revoke=True,
         )
 
-    def forward_messages(self, chat_id: int, from_chat_id: int, message_ids: list):
+    def forward_messages(
+        self,
+        chat_id: int,
+        from_chat_id: int,
+        message_ids: list,
+        disable_notification: bool = None,
+        from_background: bool = None,
+        send_date: int = None,
+    ):
         """Запрос на пересылку сообщения из одного чата в другой"""
         return self.send_data(
             'forwardMessages',
             chat_id=chat_id,
             from_chat_id=from_chat_id,
             message_ids=message_ids,
+            options=_get_send_message_options(
+                disable_notification,
+                from_background,
+                send_date,
+            ),
         )
 
     def ban_chat_member(self, chat_id: int, user_id: int, banned_until_date: int = 0):
@@ -444,3 +466,28 @@ class API(BaseAPI):
             chat_id=chat_id,
             message_id=message_id,
         )
+
+
+def _get_send_message_options(
+    disable_notification: bool = None,
+    from_background: bool = None,
+    send_date: int = None,
+):
+    """Собирает дополнительные параметры для отправки сообщения"""
+    options = {}
+    if disable_notification is not None:
+        options['disable_notification'] = disable_notification
+
+    if from_background is not None:
+        options['from_background'] = from_background
+
+    if send_date is not None:
+        options['scheduling_state'] = {
+            '@type': 'messageSchedulingStateSendAtDate',
+            'send_date': send_date,
+        }
+
+    if options:
+        options['type'] = 'messageSendOptions'
+
+    return options

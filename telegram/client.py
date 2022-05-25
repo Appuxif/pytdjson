@@ -2,6 +2,7 @@ import asyncio
 import logging
 import signal
 from collections import defaultdict
+from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
 from types import FrameType
 from typing import Any, Callable, DefaultDict, Dict, List, Optional
@@ -18,31 +19,35 @@ MESSAGE_HANDLER_TYPE: str = 'updateNewMessage'
 
 @dataclass
 class Settings:
-    """Настройки телеграм клиента"""
+    """
+    Настройки телеграм клиента
+    """
 
-    api_id: int
-    api_hash: str
-    database_encryption_key: str
-    phone: Optional[str] = None
-    auth_code: Optional[str] = None
-    password: Optional[str] = None
-    bot_token: Optional[str] = None
-    library_path: Optional[str] = None
-    files_directory: Optional[str] = None
-    use_test_dc: bool = False
-    use_message_database: bool = True
-    use_file_database: bool = True
-    use_chat_info_database: bool = True
-    enable_storage_optimizer: bool = True
-    device_model: str = 'python-telegram'
-    application_version: str = VERSION
-    system_version: str = 'unknown'
-    system_language_code: str = 'en'
-    default_workers_queue_size: int = 1000
-    tdlib_verbosity: int = 2
-    first_name: str = ''
-    last_name: str = ''
-    update_timeout: int = 30
+    api_id: int  # API ID телеграм приложения
+    api_hash: str  # API Hash телеграм приложения
+    database_encryption_key: str  # Ключ шифрования БД
+    phone: Optional[str] = None  # Телефон клиента
+    auth_code: Optional[str] = None  # Код авторизации, если известен
+    password: Optional[str] = None  # Пароль авторизации, если имеется
+    bot_token: Optional[str] = None  # Токен бота, если не используется клиент
+    library_path: Optional[str] = None  # Путь до библиотеки libtdjson
+    files_directory: Optional[str] = None  # Путь до файлов клиента
+    use_test_dc: bool = False  # Использовать тестовый телеграм сервер
+    use_message_database: bool = True  # Использовать БД для сообщений
+    use_file_database: bool = True  # Использовать БД для файлов
+    use_chat_info_database: bool = True  # Использовать БД для чатов
+    enable_storage_optimizer: bool = True  # Использовать оптимизатор хранилища
+    device_model: str = 'python-telegram'  # Модель, может быть любой строкой
+    application_version: str = VERSION  # Версия, может быть любой строкой
+    system_version: str = 'unknown'  # Версия, может быть любой строкой
+    system_language_code: str = 'en'  # Код языка
+    default_workers_queue_size: int = 1000  # Длина очереди обновлений
+    tdlib_verbosity: int = 2  # Логирование tdlib
+    first_name: str = ''  # Имя клиента - только для регистрации
+    last_name: str = ''  # Фамилия клиента - только для регистрации
+    update_timeout: int = 30  # Время ожидания ответа от tdlib
+    tdjson_workers: int = 3  # Количество воркеров, который слушают tdlib
+    handlers_workers: int = 3  # Количество воркеров, которые обрабатывают обновления
 
     def __post_init__(self):
 
@@ -80,6 +85,8 @@ class AsyncTelegram:
             loop=self._loop,
         )
 
+        self._executor = ThreadPoolExecutor(max_workers=1)
+
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGABRT, self._signal_handler)
@@ -96,10 +103,10 @@ class AsyncTelegram:
     def run(self):
         self.logger.debug('running...')
         self.is_enabled = True
-        self.create_task(self._tdjson_worker())
-        self.create_task(self._handlers_worker())
-        self.create_task(self._handlers_worker())
-        self.create_task(self._handlers_worker())
+        for _ in range(self.settings.tdjson_workers):
+            self.create_task(self._tdjson_worker())
+        for _ in range(self.settings.handlers_workers):
+            self.create_task(self._handlers_worker())
         self.run_forever()
 
     def run_forever(self):
@@ -163,13 +170,14 @@ class AsyncTelegram:
 
     async def _tdjson_worker(self) -> None:
         # self.logger.debug('tdjson worker starting...')
+        loop = asyncio.get_running_loop()
+
         while self.is_enabled:
-            update = self._tdjson.receive()
+            update = await loop.run_in_executor(self._executor, self._tdjson.receive)
 
             if update:
                 await self._update_async_result(update)
                 await self._run_handlers(update)
-            await asyncio.sleep(0.1)
 
     def _prepare_update(self, update: dict):
         return Update(update)
@@ -186,8 +194,6 @@ class AsyncTelegram:
                     await result
             finally:
                 self.handler_workers_queue.task_done()
-
-            await asyncio.sleep(0.1)
 
     async def _update_async_result(self, update: Dict[Any, Any]) -> None:
 

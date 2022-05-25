@@ -43,12 +43,34 @@ class MessageDocument(MessageContentBase):
 
 @dataclass
 class MessageInvoice(MessageContentBase):
-    """TODO: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_invoice.html"""
+    """Чек"""
+
+    title: str = None
+    description: str = None
+    # photo
+    currency: str = None
+    total_amount: int = None
+    start_parameter: int = None
+    is_test: bool = None
+    need_shipping_address: bool = None
+    receipt_message_id: int = None
 
 
 @dataclass
 class MessageLocation(MessageContentBase):
-    """TODO: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_location.html"""
+    """Локация"""
+
+    @dataclass
+    class Location(RawDataclass):
+        latitude: float = None
+        longitude: float = None
+        horizontal_accuracy: float = None
+
+    location: Location = None
+    live_period: int = None
+    expires_in: int = None
+    heading: int = None
+    proximity_alert_radius: int = None
 
 
 @dataclass

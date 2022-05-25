@@ -10,11 +10,13 @@ if TYPE_CHECKING:
 class BaseAPI:
     """Базовый класс API хелпера для телеграм клиента"""
 
-    def __init__(self, client: 'AsyncTelegram'):
+    def __init__(self, client: 'AsyncTelegram', timeout=30):
         self.client = client
+        self.timeout = timeout
 
-    def send_data(self, method, request_id=None, timeout=30, **kwargs):
+    def send_data(self, method, request_id=None, timeout=None, **kwargs):
         """Асинхронный вызов метода"""
+        timeout = timeout or self.timeout
         kwargs['@type'] = method
         return self.client.send_data(kwargs, request_id=request_id, timeout=timeout)
 

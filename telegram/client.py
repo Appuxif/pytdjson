@@ -42,6 +42,7 @@ class Settings:
     tdlib_verbosity: int = 2
     first_name: str = ''
     last_name: str = ''
+    update_timeout: int = 30
 
     def __post_init__(self):
 
@@ -54,7 +55,7 @@ class AsyncTelegram:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.api = API(self)
+        self.api = API(self, settings.update_timeout)
         self.authorization = Authorization(self)
 
         self.logger = logging.getLogger(str(self))
@@ -273,7 +274,7 @@ class Authorization:
 
     def __init__(self, client: AsyncTelegram):
         self.client = client
-        self.api = AuthAPI(self.client)
+        self.api = AuthAPI(self.client, client.settings.update_timeout)
 
         self.authorization_states_mapping = {
             None: self.api.get_authorization_state,

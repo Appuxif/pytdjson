@@ -1,7 +1,7 @@
 import json
-from dataclasses import dataclass, field, fields, asdict
+from dataclasses import Field, asdict, dataclass, field, fields
 from enum import Enum
-from typing import Callable, Dict, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 
 @dataclass()
@@ -15,66 +15,74 @@ class RawDataclass:
 
     Метод ._assign_raw используется в дочернем классе, чтобы
     вручную определить атрибуты по более сложной логике перед
-    автоматическим определением
+    автоматическим определением.
 
-    Метод .as_json возвращает текстовое представление объекта в формате JSON
+    Метод .as_json возвращает текстовое представление объекта в формате JSON.
     """
 
-    raw: dict = field(repr=False)
+    raw: dict = field(repr=False)  # type: ignore
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
 
         if self.raw is None:
             return
 
         self._assign_raw()
 
-        keys = self.raw.keys()
-        keys = list(keys)
-        for key in keys:
+        for key in self.raw.keys():
             if hasattr(self, key) and getattr(self, key, None) is None:
-                key_field = self.__dataclass_fields__.get(key)
-                value_type = key_field.type if key_field else (lambda a: a)
-                value = value_type(self.raw[key])
+                key_field: Optional[
+                    Field[RawDataclass]
+                ] = self.__dataclass_fields__.get(key)
+
+                if key_field is None:
+                    value = self.raw[key]
+                else:
+                    value = key_field.type(self.raw[key])
+
                 setattr(self, key, value)
 
-    def _assign_raw(self):
+    def _assign_raw(self) -> None:
         pass
 
-    def _assign_raw_optional(self, key, field_cls=None):
+    def _assign_raw_optional(
+        self, key: str, field_cls: Optional[Type[Any]] = None
+    ) -> None:
         field_cls = field_cls or self.__dataclass_fields__[key].type
         value = self.raw.get(key, None)
         if value:
             setattr(self, key, field_cls(value))
 
-    def to_json(self):
+    def to_json(self) -> str:
         """Сериализация исходного словаря в JSON формат"""
         return json.dumps(self.raw, ensure_ascii=False)
 
     @classmethod
-    def from_json(cls, data: str):
+    def from_json(cls, data: str) -> 'RawDataclass':
         """Десериализация из JSON формата"""
         data_dict = json.loads(data)
         return cls(data_dict)
 
-    def asdict(self):
+    def asdict(self) -> Dict[Any, Any]:
         return asdict(self, dict_factory=dict_factory)
 
 
 class ObjectBuilder:
     """Билдер, возвращает инстанс объекта, тип которого находится в маппинге"""
 
-    mapping: Dict[str, Type[RawDataclass]] = None
+    mapping: Dict[str, Type[RawDataclass]] = {}
     key: str = '@type'
-    default: Callable = RawDataclass
+    default: Type[RawDataclass] = RawDataclass
 
-    def __call__(self, object_dict, *args, **kwargs):
+    def __call__(
+        self, object_dict: Dict[Any, Any], *args: Any, **kwargs: Any
+    ) -> RawDataclass:
         return self.mapping.get(object_dict[self.key], self.default)(
             object_dict, *args, **kwargs
         )
 
 
-def build_variables(cls: Type[RawDataclass], base=None):
+def build_variables(cls: Type[RawDataclass], base: Optional[str] = None) -> List[str]:
     """Пробегается по всему дереву вложенных объектов и
     возвращает список из возможных переменных для доступа к значению
     через f-strings
@@ -104,7 +112,10 @@ def build_variables(cls: Type[RawDataclass], base=None):
     return variables
 
 
-def build_variables_for_object_builder(cls_field, base):
+def build_variables_for_object_builder(
+    cls_field: Field,  # type: ignore
+    base: str,
+) -> List[Any]:
     """Пробегается по ObjectBuilder.mapping и объединяет всевозможные поля"""
     return list(
         {
@@ -115,11 +126,11 @@ def build_variables_for_object_builder(cls_field, base):
     )
 
 
-def dict_factory(values: list):
+def dict_factory(values: List[Tuple[str, Any]]) -> Dict[str, Any]:
     values = list(values)
 
     for i, value in enumerate(values):
         if isinstance(value[1], Enum):
-            values[i] = [value[0], str(value[1])]
+            values[i] = [value[0], str(value[1])]  # type: ignore[call-overload]
 
     return dict(values)

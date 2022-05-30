@@ -1,7 +1,8 @@
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from .types.text import TextParseMode
+from .utils import Result, ResultCoro
 
 if TYPE_CHECKING:
     from .client import AsyncTelegram
@@ -10,17 +11,25 @@ if TYPE_CHECKING:
 class BaseAPI:
     """Базовый класс API хелпера для телеграм клиента"""
 
-    def __init__(self, client: 'AsyncTelegram', timeout=30):
+    def __init__(self, client: 'AsyncTelegram', timeout: int = 30):
         self.client = client
-        self.timeout = timeout
+        self._timeout = timeout
 
-    def send_data(self, method, request_id=None, timeout=None, **kwargs):
+    def send_data(
+        self,
+        method: str,
+        request_id: Optional[str] = None,
+        timeout: Optional[int] = None,
+        **kwargs: Any
+    ) -> ResultCoro:
         """Асинхронный вызов метода"""
-        timeout = timeout or self.timeout
+        timeout = timeout or self._timeout
         kwargs['@type'] = method
         return self.client.send_data(kwargs, request_id=request_id, timeout=timeout)
 
-    def send_data_sync(self, method, request_id=None, **kwargs):
+    def send_data_sync(
+        self, method: str, request_id: Optional[str] = None, **kwargs: Any
+    ) -> Result:
         """Синхронный вызов метода"""
         kwargs['@type'] = method
         return self.client.send_data_sync(kwargs, request_id=request_id)
@@ -32,13 +41,13 @@ class AuthAPI(BaseAPI):
     аутентификации клиента в телеграм
     """
 
-    def get_authorization_state(self):
+    def get_authorization_state(self) -> ResultCoro:
         return self.send_data(
             'getAuthorizationState',
             request_id='getAuthorizationState',
         )
 
-    def set_tdlib_parameters(self):
+    def set_tdlib_parameters(self) -> ResultCoro:
 
         if not self.client.settings.api_id:
             raise ValueError('api_id not set')
@@ -70,13 +79,13 @@ class AuthAPI(BaseAPI):
             parameters=parameters,
         )
 
-    def check_database_encryption_key(self):
+    def check_database_encryption_key(self) -> ResultCoro:
         return self.send_data(
             'checkDatabaseEncryptionKey',
             encryption_key=self.client.settings.database_encryption_key,
         )
 
-    def set_authentication_phone_number(self):
+    def set_authentication_phone_number(self) -> ResultCoro:
         phone = self.client.settings.phone
 
         if not phone:
@@ -89,7 +98,7 @@ class AuthAPI(BaseAPI):
             is_current_phone_number=True,
         )
 
-    def check_authentication_bot_token(self):
+    def check_authentication_bot_token(self) -> ResultCoro:
         token = self.client.settings.bot_token
 
         if not token:
@@ -100,7 +109,7 @@ class AuthAPI(BaseAPI):
             token=token,
         )
 
-    def check_authentication_code(self, auth_code=None):
+    def check_authentication_code(self) -> ResultCoro:
         """Запрос для проверки кода авторизации"""
         auth_code = self.client.settings.auth_code
 
@@ -112,7 +121,7 @@ class AuthAPI(BaseAPI):
             code=auth_code,
         )
 
-    def register_user(self):
+    def register_user(self) -> ResultCoro:
         """Запрос на регистрацию нового пользователя"""
         first_name = self.client.settings.first_name
         last_name = self.client.settings.last_name
@@ -126,7 +135,7 @@ class AuthAPI(BaseAPI):
             last_name=str(last_name or ''),
         )
 
-    def check_authentication_password(self):
+    def check_authentication_password(self) -> ResultCoro:
         password = self.client.settings.password
 
         if not password:
@@ -141,13 +150,13 @@ class AuthAPI(BaseAPI):
 class API(BaseAPI):
     """API хелпер для телеграм клиента"""
 
-    def get_me(self):
+    def get_me(self) -> ResultCoro:
         """Запрашивает личные данные клиента"""
         return self.send_data(
             'getMe',
         )
 
-    def get_chat(self, chat_id: int):
+    def get_chat(self, chat_id: int) -> ResultCoro:
         """Запрашивает информацию о чате. Оффлайн метод"""
         return self.send_data(
             'getChat',
@@ -159,8 +168,8 @@ class API(BaseAPI):
         offset_order: int = 0,
         offset_chat_id: int = 0,
         limit: int = 100,
-        chat_list: str = None,
-    ):
+        chat_list: Optional[str] = None,
+    ) -> ResultCoro:
         """Запрашивает список чатов"""
         return self.send_data(
             'getChats',
@@ -171,7 +180,9 @@ class API(BaseAPI):
             timeout=600,
         )
 
-    def load_chats(self, limit: int = 10, chat_list: str = None):
+    def load_chats(
+        self, limit: int = 10, chat_list: Optional[str] = None
+    ) -> ResultCoro:
         """Запрашивает загрузку чатов. Чаты будут приходить
         отдельными обновлениями через updateNewChat
         """
@@ -188,7 +199,7 @@ class API(BaseAPI):
         from_message_id: int = 0,
         offset: int = 0,
         only_local: bool = False,
-    ):
+    ) -> ResultCoro:
         """Запрашивает историю чата"""
         self.send_data(
             'getChatHistory',
@@ -199,7 +210,9 @@ class API(BaseAPI):
             only_local=only_local,
         )
 
-    def get_web_page_instant_view(self, url: str, force_full: bool = False):
+    def get_web_page_instant_view(
+        self, url: str, force_full: bool = False
+    ) -> ResultCoro:
         """Use this method to request instant preview of a webpage.
         Returns error with 404 if there is no preview for this webpage.
 
@@ -213,42 +226,42 @@ class API(BaseAPI):
             force_full=force_full,
         )
 
-    def get_user(self, user_id: int):
+    def get_user(self, user_id: int) -> ResultCoro:
         """Запрос на получение подробной информации о пользователе. Оффлайн"""
         return self.send_data(
             'getUser',
             user_id=user_id,
         )
 
-    def get_supergroup(self, supergroup_id: int):
+    def get_supergroup(self, supergroup_id: int) -> ResultCoro:
         """Запрос на получение информации о супергруппе. Оффлайн"""
         return self.send_data(
             'getSupergroup',
             supergroup_id=supergroup_id,
         )
 
-    def get_supergroup_full_info(self, supergroup_id: int):
+    def get_supergroup_full_info(self, supergroup_id: int) -> ResultCoro:
         """Запрос на получение полной информации о супергруппе. Кэшируется на 1 минуту"""
         return self.send_data(
             'getSupergroupFullInfo',
             supergroup_id=supergroup_id,
         )
 
-    def get_basic_group(self, basic_group_id: int):
+    def get_basic_group(self, basic_group_id: int) -> ResultCoro:
         """Запрос на получение информации о базовой группе. Оффлайн метод"""
         return self.send_data(
             'getBasicGroup',
             basic_group_id=basic_group_id,
         )
 
-    def get_basic_group_full_info(self, basic_group_id: int):
+    def get_basic_group_full_info(self, basic_group_id: int) -> ResultCoro:
         """Запрос на получение полной информации о базовой группе"""
         return self.send_data(
             'getBasicGroupFullInfo',
             basic_group_id=basic_group_id,
         )
 
-    def get_message(self, message_id: int, chat_id: int):
+    def get_message(self, message_id: int, chat_id: int) -> ResultCoro:
         """Запрос на получение информации о сообщении"""
         return self.send_data(
             'getMessage',
@@ -261,8 +274,8 @@ class API(BaseAPI):
         chat_id: int,
         message_id: int,
         data: str,
-        password: str = None,
-    ):
+        password: Optional[str] = None,
+    ) -> ResultCoro:
         """Запрос на отправку ответа - нажатия на кнопку на клавиатуре бота"""
 
         if password is not None:
@@ -283,33 +296,33 @@ class API(BaseAPI):
             payload=payload,
         )
 
-    def open_chat(self, chat_id: int):
+    def open_chat(self, chat_id: int) -> ResultCoro:
         """Запрос на открытие чата"""
         return self.send_data(
             'openChat',
             chat_id=chat_id,
         )
 
-    def close_chat(self, chat_id: int):
+    def close_chat(self, chat_id: int) -> ResultCoro:
         """Запрос на закрытие чата"""
         return self.send_data(
             'closeChat',
             chat_id=chat_id,
         )
 
-    def close(self):
+    def close(self) -> ResultCoro:
         """Запрос на закрытие клиента"""
         return self.send_data(
             'close',
         )
 
-    def log_out(self):
+    def log_out(self) -> ResultCoro:
         """Запрос на выход из клиента"""
         return self.send_data(
             'logOut',
         )
 
-    def view_messages(self, chat_id: int, message_ids: list):
+    def view_messages(self, chat_id: int, message_ids: List[int]) -> ResultCoro:
         """Запрос на просмотр сообщений. Все непрочитанные сообщения
         в чате с указанным ID окажутся прочитанными
         """
@@ -322,20 +335,23 @@ class API(BaseAPI):
     def send_message(
         self,
         chat_id: int,
-        text: str = None,
-        parse_mode: TextParseMode = None,
+        text: Optional[str] = None,
+        parse_mode: Optional[TextParseMode] = None,
         disable_web_page_preview: bool = True,
         reply_to_message_id: int = 0,
-        disable_notification: bool = None,
-        from_background: bool = None,
-        send_date: int = None,
-    ):
+        disable_notification: Optional[bool] = None,
+        from_background: Optional[bool] = None,
+        send_date: Optional[int] = None,
+    ) -> ResultCoro:
         """Sends a message to a chat.
         The chat must be in the tdlib's database.
         If there is no chat in the DB, tdlib returns an error.
         Chat is being saved to the database when the client
         receives a message or when you call the `get_chats` method.
         """
+        if text is None:
+            raise ValueError('Text is None')
+
         formatted_text = {'@type': 'formattedText', 'text': text}
 
         if parse_mode is not None and parse_mode is not TextParseMode.NONE:
@@ -361,7 +377,7 @@ class API(BaseAPI):
             ),
         )
 
-    def parse_text_entities(self, text: str, parse_mode: TextParseMode):
+    def parse_text_entities(self, text: str, parse_mode: TextParseMode) -> Result:
         """Синхронный оффлайн запрос на парсинг текста"""
         return self.send_data_sync(
             'parseTextEntities',
@@ -369,7 +385,7 @@ class API(BaseAPI):
             parse_mode={'@type': parse_mode.value, 'version': 2},
         )
 
-    def resend_messages(self, chat_id: int, message_ids: list):
+    def resend_messages(self, chat_id: int, message_ids: List[int]) -> ResultCoro:
         """Запрос на переотправку неотправленного сообщения"""
         return self.send_data(
             'resendMessages',
@@ -377,7 +393,7 @@ class API(BaseAPI):
             message_ids=message_ids,
         )
 
-    def delete_messages(self, chat_id, message_ids: list):
+    def delete_messages(self, chat_id: int, message_ids: List[int]) -> ResultCoro:
         """Запрос на удаление сообщений"""
         return self.send_data(
             'deleteMessages',
@@ -390,11 +406,11 @@ class API(BaseAPI):
         self,
         chat_id: int,
         from_chat_id: int,
-        message_ids: list,
-        disable_notification: bool = None,
-        from_background: bool = None,
-        send_date: int = None,
-    ):
+        message_ids: List[int],
+        disable_notification: Optional[bool] = None,
+        from_background: Optional[bool] = None,
+        send_date: Optional[int] = None,
+    ) -> ResultCoro:
         """Запрос на пересылку сообщения из одного чата в другой"""
         return self.send_data(
             'forwardMessages',
@@ -408,16 +424,18 @@ class API(BaseAPI):
             ),
         )
 
-    def ban_chat_member(self, chat_id: int, user_id: int, banned_until_date: int = 0):
+    def ban_chat_member(
+        self, chat_id: int, user_id: int, banned_until_date: int = 0
+    ) -> ResultCoro:
         """Запрос на бан участника чата
 
         :param chat_id: Чат
-        :param user_id: Пользовтаель
+        :param user_id: Пользователь
         :param banned_until_date: Время бана. 0 - навсегда
         """
         status = {
             '@type': 'chatMemberStatusBanned',
-            'banned_until_date': 0,
+            'banned_until_date': banned_until_date,
         }
         return self.send_data(
             'setChatMemberStatus',
@@ -426,42 +444,42 @@ class API(BaseAPI):
             status=status,
         )
 
-    def join_chat_by_invite_link(self, invite_link: str):
+    def join_chat_by_invite_link(self, invite_link: str) -> ResultCoro:
         """Запрос на присоединение к чату через инвайт ссылку"""
         return self.send_data(
             'joinChatByInviteLink',
             invite_link=invite_link,
         )
 
-    def join_chat(self, chat_id: int):
+    def join_chat(self, chat_id: int) -> ResultCoro:
         """Запрос на присоединение к чату через ID"""
         return self.send_data(
             'joinChat',
             chat_id=chat_id,
         )
 
-    def leave_chat(self, chat_id: int):
+    def leave_chat(self, chat_id: int) -> ResultCoro:
         """Запрос на покидание чата"""
         return self.send_data(
             'leaveChat',
             chat_id=chat_id,
         )
 
-    def search_public_chat(self, username: str):
+    def search_public_chat(self, username: str) -> ResultCoro:
         """Запрос на поиск чата по его username"""
         return self.send_data(
             'searchPublicChat',
             username=username,
         )
 
-    def create_private_chat(self, user_id: int):
+    def create_private_chat(self, user_id: int) -> ResultCoro:
         """Запрос на создание приватного чата с пользователем"""
         return self.send_data(
             'createPrivateChat',
             user_id=user_id,
         )
 
-    def get_message_link(self, chat_id: int, message_id: int):
+    def get_message_link(self, chat_id: int, message_id: int) -> ResultCoro:
         """Запрос на генерацию ссылки для сообщения. Работает только для супергрупп"""
         return self.send_data(
             'getMessageLink',
@@ -470,13 +488,16 @@ class API(BaseAPI):
         )
 
 
+Options = Dict[str, Union[int, bool, str, Dict[str, Any]]]
+
+
 def _get_send_message_options(
-    disable_notification: bool = None,
-    from_background: bool = None,
-    send_date: int = None,
-):
+    disable_notification: Optional[bool] = None,
+    from_background: Optional[bool] = None,
+    send_date: Optional[int] = None,
+) -> Options:
     """Собирает дополнительные параметры для отправки сообщения"""
-    options = {}
+    options: Options = {}
     if disable_notification is not None:
         options['disable_notification'] = disable_notification
 

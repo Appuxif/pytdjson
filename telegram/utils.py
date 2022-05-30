@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Coroutine, Dict, Optional
 
 
 class Result:
@@ -25,7 +25,7 @@ class Result:
         else:
             self.ok_received = True
 
-    def is_valid(self, raise_exc=True):
+    def is_valid(self, raise_exc: bool = True) -> bool:
         try:
             error_messages = []
             if self.error_received:
@@ -43,6 +43,10 @@ class Result:
             if raise_exc:
                 raise e
             return False
+        return True
 
     def __str__(self) -> str:
         return f'Result <{self.id}>'
+
+
+ResultCoro = Coroutine[Any, Any, Result]

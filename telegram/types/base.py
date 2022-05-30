@@ -31,14 +31,14 @@ class RawDataclass:
 
         for key in self.raw.keys():
             if hasattr(self, key) and getattr(self, key, None) is None:
-                key_field: Optional[
-                    Field[RawDataclass]
-                ] = self.__dataclass_fields__.get(key)
+
+                key_field: Optional[Field[RawDataclass]]
+                key_field = self.__dataclass_fields__.get(key)  # noqa
 
                 if key_field is None:
                     value = self.raw[key]
                 else:
-                    value = key_field.type(self.raw[key])
+                    value = key_field.type(self.raw[key])  # noqa
 
                 setattr(self, key, value)
 
@@ -48,7 +48,7 @@ class RawDataclass:
     def _assign_raw_optional(
         self, key: str, field_cls: Optional[Type[Any]] = None
     ) -> None:
-        field_cls = field_cls or self.__dataclass_fields__[key].type
+        field_cls = field_cls or self.__dataclass_fields__[key].type  # noqa
         value = self.raw.get(key, None)
         if value:
             setattr(self, key, field_cls(value))
@@ -74,12 +74,11 @@ class ObjectBuilder:
     key: str = '@type'
     default: Type[RawDataclass] = RawDataclass
 
-    def __call__(
-        self, object_dict: Dict[Any, Any], *args: Any, **kwargs: Any
-    ) -> RawDataclass:
-        return self.mapping.get(object_dict[self.key], self.default)(
-            object_dict, *args, **kwargs
-        )
+    def __call__(self, object_dict: Dict[Any, Any]) -> RawDataclass:
+        object_dataclass = self.mapping.get(object_dict[self.key])
+        if object_dataclass is None:
+            object_dataclass = self.default
+        return object_dataclass(object_dict)
 
 
 def build_variables(cls: Type[RawDataclass], base: Optional[str] = None) -> List[str]:

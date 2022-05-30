@@ -367,7 +367,7 @@ class Authorization:
     def set_phone_number_or_bot_token(self) -> ResultCoro:
         """Sends phone number or a bot_token"""
         if self.client.settings.phone:
-            coro: ResultCoro = self.api.set_authentication_phone_number()
+            coro = self.api.set_authentication_phone_number()
         elif self.client.settings.bot_token:
             coro = self.api.check_authentication_bot_token()
         else:

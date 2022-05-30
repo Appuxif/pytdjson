@@ -201,7 +201,7 @@ class API(BaseAPI):
         only_local: bool = False,
     ) -> ResultCoro:
         """Запрашивает историю чата"""
-        self.send_data(
+        return self.send_data(
             'getChatHistory',
             chat_id=chat_id,
             limit=limit,

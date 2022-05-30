@@ -1,4 +1,4 @@
-from typing import Any, Coroutine, Dict, Optional
+from typing import Any, Coroutine, Dict, List, Optional
 
 
 class Result:
@@ -27,7 +27,7 @@ class Result:
 
     def is_valid(self, raise_exc: bool = True) -> bool:
         try:
-            error_messages = []
+            error_messages: List[str] = []
             if self.error_received:
                 error_messages.append('Telegram error')
 

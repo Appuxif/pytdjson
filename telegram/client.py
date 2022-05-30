@@ -1,18 +1,20 @@
 import asyncio
 import logging
 import signal
+from asyncio import AbstractEventLoop, Task
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
 from types import FrameType
-from typing import Any, Callable, DefaultDict, Dict, List, Optional
+from typing import Any, Callable, Coroutine, DefaultDict, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from . import VERSION
 from .api import API, AuthAPI
 from .tdjson import TDJson
+from .types.base import RawDataclass
 from .types.update import AuthorizationState, Update, UpdateAuthorizationState
-from .utils import Result
+from .utils import Result, ResultCoro
 
 MESSAGE_HANDLER_TYPE: str = 'updateNewMessage'
 
@@ -49,10 +51,13 @@ class Settings:
     tdjson_workers: int = 3  # Количество воркеров, который слушают tdlib
     handlers_workers: int = 3  # Количество воркеров, которые обрабатывают обновления
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
 
         if not self.bot_token and not self.phone:
             raise ValueError('You must provide bot_token or phone')
+
+
+UpdateHandlerType = Callable[[Any], Coroutine[Any, Any, None]]
 
 
 class AsyncTelegram:
@@ -68,8 +73,10 @@ class AsyncTelegram:
         self.is_enabled = False
         self.is_killing = False
 
-        self._updates: Dict[str, dict] = {}
-        self._update_handlers: DefaultDict[str, List[Callable]] = defaultdict(list)
+        self._updates: Dict[str, Dict[Any, Any]] = {}
+        self._update_handlers: DefaultDict[str, List[UpdateHandlerType]] = defaultdict(
+            list
+        )
 
         self._tdjson = TDJson(
             library_path=settings.library_path,
@@ -78,9 +85,11 @@ class AsyncTelegram:
 
         self._loop = asyncio.new_event_loop()
         self._loop.set_exception_handler(self._loop_exception_handler)
-        self._loop_tasks = []
+        self._loop_tasks: List[Task[Any]] = []
 
-        self.handler_workers_queue = asyncio.Queue(
+        self.handler_workers_queue = asyncio.Queue[
+            Tuple[UpdateHandlerType, Dict[Any, Any]]
+        ](
             self.settings.default_workers_queue_size,
             loop=self._loop,
         )
@@ -91,16 +100,18 @@ class AsyncTelegram:
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGABRT, self._signal_handler)
 
-    def _loop_exception_handler(self, loop, context):
+    def _loop_exception_handler(
+        self, loop: AbstractEventLoop, context: Dict[Any, Any]
+    ) -> None:
         if not isinstance(context.get('exception'), asyncio.exceptions.CancelledError):
             self.logger.exception(context.get('message'))
         self.stop()
 
-    def _signal_handler(self, signum: int, frame: FrameType) -> None:
+    def _signal_handler(self, signum: int, frame: Optional[FrameType]) -> None:
         self.logger.debug('stop signal received')
         self.stop(kill=True)
 
-    def run(self):
+    def run(self) -> None:
         self.logger.debug('running...')
         self.is_enabled = True
         for _ in range(self.settings.tdjson_workers):
@@ -109,7 +120,7 @@ class AsyncTelegram:
             self.create_task(self._handlers_worker())
         self.run_forever()
 
-    def run_forever(self):
+    def run_forever(self) -> None:
         try:
             self.logger.debug('run forever')
             self._loop.run_forever()
@@ -124,17 +135,17 @@ class AsyncTelegram:
                 self._loop.close()
                 self._tdjson.stop()
 
-    def create_task(self, coro):
+    def create_task(self, coro: Coroutine[Any, Any, Any]) -> None:
         self.logger.debug(f'created task: {coro.__name__}')
         task = self._loop.create_task(coro)
 
-        def handler(t):
+        def handler(t: Task[Any]) -> None:
             t.result()
 
         task.add_done_callback(handler)
         self._loop_tasks.append(task)
 
-    def cancel_tasks(self):
+    def cancel_tasks(self) -> None:
         [task.cancel() for task in self._loop_tasks]
         while self._loop_tasks:
             task = self._loop_tasks.pop()
@@ -145,7 +156,9 @@ class AsyncTelegram:
                 pass
         self.logger.debug('all tasks canceled')
 
-    async def _wait_futures(self, fs, timeout=None):
+    async def _wait_futures(
+        self, fs: List[Coroutine[Any, Any, Any]], timeout: Optional[int] = None
+    ) -> None:
         done, pending = await asyncio.wait(
             fs,
             loop=self._loop,
@@ -155,7 +168,7 @@ class AsyncTelegram:
         [f.cancel() for f in pending]
         [f.result() for f in done]
 
-    def stop(self, kill=False):
+    def stop(self, kill: bool = False) -> None:
         if not self.is_enabled or self.is_killing:
             return
 
@@ -165,7 +178,7 @@ class AsyncTelegram:
         self.is_enabled = False
         self._loop.stop()
 
-    def kill(self):
+    def kill(self) -> None:
         self.stop(kill=True)
 
     async def _tdjson_worker(self) -> None:
@@ -179,7 +192,7 @@ class AsyncTelegram:
                 await self._update_async_result(update)
                 await self._run_handlers(update)
 
-    def _prepare_update(self, update: dict):
+    def _prepare_update(self, update: Dict[Any, Any]) -> RawDataclass:
         return Update(update)
 
     async def _handlers_worker(self) -> None:
@@ -212,7 +225,7 @@ class AsyncTelegram:
         self,
         data: Dict[Any, Any],
         request_id: Optional[str] = None,
-        timeout: Optional[int] = 30,
+        timeout: int = 30,
     ) -> Result:
 
         data.setdefault('@extra', {})
@@ -234,7 +247,7 @@ class AsyncTelegram:
 
     async def _get_update(
         self,
-        request_id: Optional[str] = None,
+        request_id: str,
         timeout: int = 30,
     ) -> Dict[Any, Any]:
         loop = asyncio.get_running_loop()
@@ -248,24 +261,33 @@ class AsyncTelegram:
 
             if loop.time() - timer > timeout:
                 raise TimeoutError(f'result not set {request_id}')
+        return {}
 
     async def _run_handlers(self, update: Dict[Any, Any]) -> None:
         update_type: str = update.get('@type', 'unknown')
         for handler in self._update_handlers[update_type]:
             await self.handler_workers_queue.put((handler, update))
 
-    def add_message_handler(self, func: Callable) -> None:
-        self.add_update_handler(MESSAGE_HANDLER_TYPE, func)
+    def add_message_handler(
+        self, func_or_coro: Callable[[Any], Coroutine[Any, Any, None]]
+    ) -> None:
+        self.add_update_handler(MESSAGE_HANDLER_TYPE, func_or_coro)
 
-    def add_update_handler(self, handler_type: str, func: Callable) -> None:
-        self.logger.debug(f'update handler added: {handler_type} {func.__name__}')
-        if func not in self._update_handlers[handler_type]:
-            self._update_handlers[handler_type].append(func)
+    def add_update_handler(
+        self,
+        handler_type: str,
+        func_or_coro: Callable[[Any], Coroutine[Any, Any, None]],
+    ) -> None:
+        self.logger.debug(
+            f'update handler added: {handler_type} {func_or_coro.__name__}'
+        )
+        if func_or_coro not in self._update_handlers[handler_type]:
+            self._update_handlers[handler_type].append(func_or_coro)
 
     def clear_update_handler(self, handler_type: str) -> None:
         self._update_handlers[handler_type].clear()
 
-    def login(self, timeout=10) -> bool:
+    def login(self, timeout: int = 10) -> bool:
         """Login process (blocking)
 
         Must be called before any other call.
@@ -299,7 +321,9 @@ class Authorization:
         self.authorized = False
         self.state = None
 
-    async def authorization_state_handler(self, update: UpdateAuthorizationState):
+    async def authorization_state_handler(
+        self, update: UpdateAuthorizationState
+    ) -> None:
         if not self.client.is_enabled:
             return
 
@@ -310,7 +334,7 @@ class Authorization:
         result = await method()
         result.is_valid()
 
-    def run(self, timeout):
+    def run(self, timeout: int) -> bool:
         """Запускает процесс авторизации клиента"""
         self.client.add_update_handler(
             'updateAuthorizationState',
@@ -324,11 +348,11 @@ class Authorization:
 
         return self.authorized
 
-    async def _wait_code(self, timeout=30):
+    async def _wait_code(self, timeout: int = 30) -> None:
         if timeout is None:
             return
 
-        loop = self.client._loop
+        loop = self.client._loop  # noqa
         timer = loop.time()
 
         while self.client.is_enabled and not self.authorized:
@@ -340,14 +364,15 @@ class Authorization:
 
             raise TimeoutError('LOGIN TOO LONG')
 
-    def set_phone_number_or_bot_token(self):
+    def set_phone_number_or_bot_token(self) -> ResultCoro:
         """Sends phone number or a bot_token"""
         if self.client.settings.phone:
-            return self.api.set_authentication_phone_number()
+            coro: ResultCoro = self.api.set_authentication_phone_number()
         elif self.client.settings.bot_token:
-            return self.api.check_authentication_bot_token()
+            coro = self.api.check_authentication_bot_token()
         else:
             raise RuntimeError('Unknown mode: both bot_token and phone are None')
+        return coro
 
     async def complete_authorization(self) -> Result:
         self.authorized = True

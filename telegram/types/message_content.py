@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from telegram.types.base import ObjectBuilder, RawDataclass
-from telegram.types.files import AnimationFile, AudioFile, DocumentFile
+from telegram.types.files import AnimationFile, AudioFile, DocumentFile, PhotoFile
 from telegram.types.text import FormattedText
 
 
@@ -75,12 +75,26 @@ class MessageLocation(MessageContentBase):
 
 @dataclass
 class MessageContact(MessageContentBase):
-    """TODO: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_contact.html"""
+    """Контакт"""
+
+    @dataclass
+    class Contact(RawDataclass):
+        phone_number: str = None
+        first_name: str = None
+        last_name: str = None
+        vcard: str = None
+        user_id: int = None
+
+    contact = Contact
 
 
 @dataclass
 class MessagePhoto(MessageContentBase):
-    """TODO: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_photo.html"""
+    """Фото"""
+
+    photo: PhotoFile = None
+    caption: FormattedText = None
+    is_secret: bool = None
 
 
 @dataclass

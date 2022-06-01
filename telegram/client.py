@@ -201,8 +201,8 @@ class AsyncTelegram:
             handler, update = await self.handler_workers_queue.get()
 
             try:
-                update = self._prepare_update(update)
-                result = handler(update)
+                prepared_update = self._prepare_update(update)
+                result = handler(prepared_update)
                 if asyncio.iscoroutine(result):
                     await result
             finally:

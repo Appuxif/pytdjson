@@ -1,7 +1,21 @@
+from __future__ import annotations
+
 import json
 from dataclasses import Field, asdict, dataclass, field, fields
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Type
+from operator import attrgetter, itemgetter
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 
 @dataclass()
@@ -22,9 +36,14 @@ class RawDataclass:
 
     raw: dict = field(repr=False)  # type: ignore
 
+    _no_assign_raw = False
+
     def __post_init__(self) -> None:
 
         if self.raw is None:
+            return
+
+        if self._no_assign_raw:
             return
 
         self._assign_raw()
@@ -65,6 +84,63 @@ class RawDataclass:
 
     def asdict(self) -> Dict[Any, Any]:
         return asdict(self, dict_factory=dict_factory)
+
+
+T = TypeVar('T')
+
+
+@dataclass
+class RawDataclassField(Generic[T]):
+    """Дескриптор поля для RawDataclass"""
+
+    field_kwargs: Dict[str, Any] = field(default_factory=dict)
+
+    value_getter: Tuple[str, ...] = ()
+    raw_key: str = ''
+
+    key_name: str = ''
+    _name = None
+
+    def __get__(
+        self, instance: RawDataclass, owner: Type[RawDataclass]
+    ) -> None | Field[T] | T:
+
+        if instance is None:
+            return field(repr=True, init=False, default=self)
+
+        if instance.raw is None:
+            return None
+
+        value_getter = self.value_getter or (self.key_name or self._name,)
+        raw_value: Any = instance.raw
+        value: T
+        for key in value_getter:
+            if isinstance(raw_value, dict):
+                raw_value = raw_value.get(key, None)
+            else:
+                break
+
+        if raw_value is None:
+            return None
+
+        dataclass_fields: Dict[Any, Any] = instance.__dataclass_fields__  # noqa
+        key_field: Field[Any] | None = dataclass_fields.get(self._name)
+
+        value = raw_value
+        if key_field is not None:
+            value = key_field.type(value)  # noqa
+
+        return value
+
+    def __set__(self, instance: RawDataclass, value: Any) -> None:
+        value_getter = self.value_getter or (self.key_name or self._name,)
+        raw_value = instance.raw
+        for key in value_getter[:-1]:
+            raw_value = raw_value[key]
+        raw_value[value_getter[-1]] = value
+
+    def __set_name__(self, owner: Type[RawDataclass], name: str) -> None:
+        self._name = name
 
 
 class ObjectBuilder:

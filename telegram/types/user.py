@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict
 
-from telegram.types.base import RawDataclass
+from telegram.types.base import RawDataclass, RawDataclassField
 from telegram.types.files import File
 
 
@@ -18,11 +19,14 @@ class UserStatus(Enum):
 
 @dataclass
 class ProfilePhoto(RawDataclass):
-    id: int = None
-    small: File = None
-    big: File = None
-    minithumbnail = None
-    has_animation: bool = None
+    """Фото профиля"""
+
+    _no_assign_raw = True
+    id: int = RawDataclassField[int]()
+    small: File = RawDataclassField[File]()
+    big: File = RawDataclassField[File]()
+    minithumbnail: Dict[Any, Any] = RawDataclassField[Dict[Any, Any]]()
+    has_animation: bool = RawDataclassField[bool]()
 
 
 class UserType(Enum):
@@ -36,13 +40,14 @@ class UserType(Enum):
 
 @dataclass
 class User(RawDataclass):
-    id: int = None
-    first_name: str = None
-    last_name: str = None
-    username: str = None
-    phone_number: str = None
-    status: UserStatus = None
-    profile_photo: ProfilePhoto = None
+    id: int = RawDataclassField()
+    first_name: str = RawDataclassField()
+    last_name: str = RawDataclassField()
+    username: str = RawDataclassField()
+    phone_number: str = RawDataclassField()
+    status: UserStatus = RawDataclassField[UserStatus](value_getter=('status', '@type'))
+    profile_photo: ProfilePhoto = RawDataclassField()
+
     is_contact: bool = None
     is_mutual_contact: bool = None
     is_verified: bool = None
@@ -55,12 +60,12 @@ class User(RawDataclass):
     language_code: str = None
 
     def _assign_raw(self):
-        status = self.raw.get('status', {}).get('@type')
-        if status:
-            self.status = UserStatus(status)
-        profile_photo = self.raw.get('profile_photo')
-        if profile_photo:
-            self.profile_photo = ProfilePhoto(profile_photo)
+        # status = self.raw.get('status', {}).get('@type')
+        # if status:
+        #     self.status = UserStatus(status)
+        # profile_photo = self.raw.get('profile_photo')
+        # if profile_photo:
+        #     self.profile_photo = ProfilePhoto(profile_photo)
         self.type = UserType(self.raw['type']['@type'])
 
 

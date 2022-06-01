@@ -90,7 +90,7 @@ class UserTestCase(TestCase):
     Тест кейс для объекта User
     """
 
-    def test_user(self):
+    def test_user(self) -> None:
         """Простой тест User"""
         user_dict = deepcopy(user_base)
 
@@ -100,4 +100,6 @@ class UserTestCase(TestCase):
         self.assertEqual('FirstName', user.first_name)
         self.assertEqual(UserStatus.ONLINE, user.status)
         self.assertEqual(UserType.REGULAR, user.type)
+        self.assertEqual(5464864564486453705, user.profile_photo.id)
+        self.assertEqual(777, user.profile_photo.small.id)
         self.assertTrue(user.is_contact)

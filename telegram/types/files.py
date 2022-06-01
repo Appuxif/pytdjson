@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List
 
 from telegram.types.base import RawDataclass
 
@@ -52,3 +53,28 @@ class DocumentFile(RawDataclass):
     file_name: str = None
     mime_type: str = None
     document: File = None
+
+
+@dataclass
+class PhotoSize(RawDataclass):
+    """Размеры фото"""
+
+    type: str = None
+    photo: File = None
+    width: int = None
+    height: int = None
+    progressive_sizes: List[int] = None
+
+    def _assign_raw(self):
+        self.progressive_sizes = [int(size) for size in self.raw['progressive_sizes']]
+
+
+@dataclass
+class PhotoFile(RawDataclass):
+    """Фото"""
+
+    has_stickers: bool = None
+    sizes: List[PhotoSize] = None
+
+    def _assign_raw(self):
+        self.sizes = [PhotoSize(size) for size in self.raw['sizes']]

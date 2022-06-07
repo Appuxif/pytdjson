@@ -1,7 +1,11 @@
 import json
-from dataclasses import dataclass, field, fields, asdict
+from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
 from typing import Callable, Dict, Type
+
+
+def default_getter(value):
+    return value
 
 
 @dataclass()
@@ -34,7 +38,15 @@ class RawDataclass:
         for key in keys:
             if hasattr(self, key) and getattr(self, key, None) is None:
                 key_field = self.__dataclass_fields__.get(key)
-                value_type = key_field.type if key_field else (lambda a: a)
+
+                if key_field:
+                    if 'getter' in key_field.metadata:
+                        value_type = key_field.metadata['getter']
+                    else:
+                        value_type = key_field.type
+                else:
+                    value_type = default_getter
+
                 value = value_type(self.raw[key])
                 setattr(self, key, value)
 

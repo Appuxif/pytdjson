@@ -52,7 +52,7 @@ class MessageInvoice(MessageContentBase):
     # photo
     currency: str = None
     total_amount: int = None
-    start_parameter: int = None
+    start_parameter: str = None
     is_test: bool = None
     need_shipping_address: bool = None
     receipt_message_id: int = None

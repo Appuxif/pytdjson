@@ -1,7 +1,8 @@
 from copy import deepcopy
 from unittest import TestCase
 
-from telegram.types.message_content import MessageContent, MessagePoll, PollType
+from telegram.types.message_content import MessageContent, MessagePoll
+from telegram.types.poll import PollType
 
 content_message_poll = {
     "@type": "messagePoll",

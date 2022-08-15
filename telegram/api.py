@@ -462,9 +462,23 @@ class API(BaseAPI):
         )
 
     def get_message_link(self, chat_id: int, message_id: int):
-        """Запрос на генерацию ссылки для сообщения. Работает только для супергрупп"""
+        """Запрос на генерацию ссылки для сообщения.
+        Работает только для супергрупп и каналов. Оффлайн запрос
+        """
         return self.send_data(
             'getMessageLink',
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+
+    def get_public_message_link(self, chat_id: int, message_id: int):
+        """Запрос на генерацию ссылки для сообщения.
+        Работает только для супергрупп и каналов, у которых есть username.
+
+        Возможно он deprecated, так как не находится в общем списке методов.
+        """
+        return self.send_data(
+            'getPublicMessageLink',
             chat_id=chat_id,
             message_id=message_id,
         )

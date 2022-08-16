@@ -26,23 +26,21 @@ class Result:
             self.ok_received = True
 
     def is_valid(self, raise_exc=True):
-        try:
-            error_messages = []
-            if self.error_received:
-                error_messages.append('Telegram error')
+        error_messages = []
+        if self.error_received:
+            error_messages.append('Telegram error')
 
-            if self.update is None:
-                error_messages.append('Something wrong, the result update is None')
+        if self.update is None:
+            error_messages.append('Something wrong, the result update is None')
 
-            if error_messages:
-                error_messages.append(str(self._data))
-                error_messages.append(str(self.update))
-                raise RuntimeError('\n'.join(error_messages))
-
-        except RuntimeError as e:
+        if error_messages:
+            error_messages.append(str(self._data))
+            error_messages.append(str(self.update))
             if raise_exc:
-                raise e
+                raise RuntimeError('\n'.join(error_messages))
             return False
+
+        return True
 
     def __str__(self) -> str:
         return f'Result <{self.id}>'

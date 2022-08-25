@@ -469,6 +469,18 @@ class API(BaseAPI):
             message_id=message_id,
         )
 
+    def add_chat_member(self, chat_id: int, user_id: int, forward_limit: int = 100):
+        """Запрос на добавление пользователя в чат.
+        forward_limit должен быть не больше 100.
+        """
+        forward_limit = min(forward_limit, 100)
+        return self.send_data(
+            'addChatMember',
+            chat_id=chat_id,
+            user_id=user_id,
+            forward_limit=forward_limit,
+        )
+
 
 def _get_send_message_options(
     disable_notification: bool = None,

@@ -1,5 +1,5 @@
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 from .types.text import TextParseMode
 
@@ -479,6 +479,16 @@ class API(BaseAPI):
             chat_id=chat_id,
             user_id=user_id,
             forward_limit=forward_limit,
+        )
+
+    def add_chat_members(self, chat_id: int, user_ids: List[int]):
+        """Запрос на добавление пользователей в чат.
+        Не более 20 пользователей за раз. Остальные игнорируются.
+        """
+        return self.send_data(
+            'addChatMembers',
+            chat_id=chat_id,
+            user_ids=user_ids,
         )
 
 

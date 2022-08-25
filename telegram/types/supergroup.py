@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 
 from telegram.types.base import RawDataclass
 
@@ -43,3 +44,29 @@ class SupergroupFullInfo(RawDataclass):
     sticker_set_id: int = None
     upgraded_from_basic_group_id: int = None
     upgraded_from_max_message_id: int = None
+
+
+class SupergroupMembersFilter(str, Enum):
+    """Фильтры участников супергруппы"""
+
+    ADMINISTRATORS = 'supergroupMembersFilterAdministrators'
+    BANNED = 'supergroupMembersFilterBanned'
+    BOTS = 'supergroupMembersFilterBots'
+    CONTACTS = 'supergroupMembersFilterContacts'
+    MENTION = 'supergroupMembersFilterMention'
+    RECENT = 'supergroupMembersFilterRecent'
+    RESTRICTED = 'supergroupMembersFilterRestricted'
+    SEARCH = 'supergroupMembersFilterSearch'
+
+    @classmethod
+    def with_query(cls):
+        """Генератор фильтров, которые поддерживают поле query"""
+        yield SupergroupMembersFilter.CONTACTS
+        yield SupergroupMembersFilter.MENTION
+        yield SupergroupMembersFilter.RESTRICTED
+        yield SupergroupMembersFilter.SEARCH
+
+    @classmethod
+    def with_thread(cls):
+        """Генератор фильтров, которые поддерживают поле message_thread_id"""
+        yield SupergroupMembersFilter.MENTION

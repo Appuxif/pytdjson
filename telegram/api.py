@@ -1,6 +1,7 @@
 import os
 from typing import TYPE_CHECKING, List
 
+from .types.supergroup import SupergroupMembersFilter
 from .types.text import TextParseMode
 
 if TYPE_CHECKING:
@@ -232,6 +233,36 @@ class API(BaseAPI):
         return self.send_data(
             'getSupergroupFullInfo',
             supergroup_id=supergroup_id,
+        )
+
+    def get_supergroup_members(
+        self,
+        supergroup_id: int,
+        filter_: SupergroupMembersFilter,
+        offset: int = 0,
+        limit: int = 200,
+        query: str = '',
+        message_thread_id: int = None,
+    ):
+        """Запрос на получение списка пользователей супергруппы.
+
+        query используется не во всех фильтрах.
+        message_thread_id только в SupergroupMembersFilter.MENTION.
+        """
+        limit = min(limit, 200)
+
+        filter_body = {'@type': str(filter_)}
+        if query and filter_ in SupergroupMembersFilter.with_query():
+            filter_body['query'] = query
+        if message_thread_id and filter_ in SupergroupMembersFilter.with_thread():
+            filter_body['message_thread_id'] = message_thread_id
+
+        return self.send_data(
+            'getSupergroupMembers',
+            supergroup_id=supergroup_id,
+            filter=filter_body,
+            offset=offset,
+            limit=limit,
         )
 
     def get_basic_group(self, basic_group_id: int):

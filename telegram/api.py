@@ -238,7 +238,7 @@ class API(BaseAPI):
     def get_supergroup_members(
         self,
         supergroup_id: int,
-        filter_: SupergroupMembersFilter,
+        filter_type: SupergroupMembersFilter,
         offset: int = 0,
         limit: int = 200,
         query: str = '',
@@ -251,10 +251,10 @@ class API(BaseAPI):
         """
         limit = min(limit, 200)
 
-        filter_body = {'@type': str(filter_)}
-        if query and filter_ in SupergroupMembersFilter.with_query():
+        filter_body = {'@type': filter_type.value}
+        if query and filter_type in SupergroupMembersFilter.with_query():
             filter_body['query'] = query
-        if message_thread_id and filter_ in SupergroupMembersFilter.with_thread():
+        if message_thread_id and filter_type in SupergroupMembersFilter.with_thread():
             filter_body['message_thread_id'] = message_thread_id
 
         return self.send_data(

@@ -249,6 +249,7 @@ class API(BaseAPI):
         query используется не во всех фильтрах.
         message_thread_id только в SupergroupMembersFilter.MENTION.
         """
+        filter_type = SupergroupMembersFilter(filter_type)
         limit = min(limit, 200)
 
         filter_body = {'@type': filter_type.value}

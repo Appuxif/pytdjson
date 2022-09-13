@@ -5,8 +5,9 @@ from unittest import TestCase
 from telegram.types.base import RawDataclass
 
 
-class TestEnum(Enum):
+class TestEnum(int, Enum):
     """TestEnum"""
+
     A = 1
     B = 2
 

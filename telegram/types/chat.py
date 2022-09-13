@@ -27,7 +27,7 @@ class ChatPermissions(RawDataclass):
     can_pin_messages: bool = None
 
 
-class ChatType(Enum):
+class ChatType(str, Enum):
     """Типы чатов"""
 
     BASIC_GROUP = 'chatTypeBasicGroup'

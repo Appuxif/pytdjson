@@ -5,7 +5,7 @@ from typing import List
 from telegram.types.base import RawDataclass
 
 
-class TextEntityType(Enum):
+class TextEntityType(str, Enum):
     """Типы элементов форматирования текста"""
 
     BANK_CARD_NUMBER = 'textEntityTypeBankCardNumber'
@@ -61,7 +61,7 @@ class FormattedText(RawDataclass):
         self.entities = [TextEntity(entity) for entity in self.raw['entities']]
 
 
-class TextParseMode(Enum):
+class TextParseMode(str, Enum):
     """Типы парсинга текстов через tdlib"""
 
     HTML = 'textParseModeHTML'

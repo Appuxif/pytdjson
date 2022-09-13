@@ -5,7 +5,7 @@ from telegram.types.base import RawDataclass
 from telegram.types.files import File
 
 
-class UserStatus(Enum):
+class UserStatus(str, Enum):
     """Онлайн статус пользователя"""
 
     EMPTY = 'userStatusEmpty'
@@ -25,7 +25,7 @@ class ProfilePhoto(RawDataclass):
     has_animation: bool = None
 
 
-class UserType(Enum):
+class UserType(str, Enum):
     """Типы пользователей"""
 
     BOT = 'userTypeBot'

@@ -17,7 +17,7 @@ class PollOption(RawDataclass):
     is_being_chosen: bool = None
 
 
-class PollType(Enum):
+class PollType(str, Enum):
     """Типы опросов"""
 
     QUIZ = 'pollTypeQuiz'

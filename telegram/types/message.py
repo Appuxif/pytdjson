@@ -13,7 +13,7 @@ __all__ = (
 )
 
 
-class MessageSenderType(Enum):
+class MessageSenderType(str, Enum):
     """Тип отправителя"""
 
     CHAT = 'messageSenderChat'

@@ -11,7 +11,7 @@ from .supergroup import Supergroup, SupergroupFullInfo
 from .user import User, UserFullInfo
 
 
-class AuthorizationState(Enum):
+class AuthorizationState(str, Enum):
     """Состояния авторизации"""
 
     CLOSED = 'authorizationStateClosed'

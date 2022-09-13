@@ -66,4 +66,4 @@ class TextParseMode(str, Enum):
 
     HTML = 'textParseModeHTML'
     MARKDOWN = 'textParseModeMarkdown'
-    NONE = None
+    NONE = 'None'

@@ -105,6 +105,13 @@ class MessageVenue(MessageContentBase):
 
 
 @dataclass
+class MessageChatAddMembers(MessageContentBase):
+    """Место сбора"""
+
+    member_user_ids: list = None
+
+
+@dataclass
 class MessageVideo(MessageContentBase):
     """TODO: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_video.html"""
 

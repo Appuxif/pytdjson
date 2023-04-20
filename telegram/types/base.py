@@ -25,9 +25,10 @@ class RawDataclass:
     """
 
     raw: dict = field(repr=False)
+    class_type: str = field(default='RawDataclass')
 
     def __post_init__(self):
-
+        self.class_type = self.__class__.__name__
         if self.raw is None:
             return
 

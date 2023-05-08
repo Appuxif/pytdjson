@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import Union
 
 from telegram.types.base import RawDataclass
 from telegram.types.message_content import MessageContent
@@ -18,6 +19,21 @@ class MessageSenderType(str, Enum):
 
     CHAT = 'messageSenderChat'
     USER = 'messageSenderUser'
+
+
+class ReactionType(str, Enum):
+    """ReactionType"""
+
+    EMOJI = 'reactionTypeEmoji'
+    CUSTOM = 'reactionTypeCustomEmoji'
+
+    def build(self, value: Union[int, str]):
+        data = {'@type': self.value}
+        if self == ReactionType.EMOJI:
+            data['emoji'] = value
+        if self == ReactionType.CUSTOM:
+            data['custom_emoji_id'] = value
+        return data
 
 
 @dataclass
@@ -49,26 +65,48 @@ class Message(RawDataclass):
     """Сообщение из обновления телеграм"""
 
     id: int = None
+    sender: MessageSender = None
     chat_id: int = None
-    date: int = None
-    edit_date: int = None
-    reply_in_chat_id: int = None
-    reply_to_message_id: int = None
-
+    # sending_state: MessageSendingState
+    # scheduling_state:MessageSchedulingState
     is_outgoing: bool = None
     is_pinned: bool = None
     can_be_edited: bool = None
     can_be_forwarded: bool = None
+    can_be_saved: bool = None
     can_be_deleted_only_for_self: bool = None
     can_be_deleted_for_all_users: bool = None
+    can_get_added_reactions: bool = None
     can_get_statistics: bool = None
+    can_get_message_thread: bool = None
+    can_get_viewers: bool = None
+    can_get_media_timestamp_links: bool = None
+    can_report_reactions: bool = None
+    has_timestamped_media: bool = None
     is_channel_post: bool = None
+    is_topic_message: bool = None
     contains_unread_mention: bool = None
-
-    sender: MessageSender = None
+    date: int = None
+    edit_date: int = None
     forward_info: MessageForwardInfo = None
+    # interaction_info: messageInteractionInfo
+    # unread_reactions: list[UnreadReaction]
+    reply_in_chat_id: int = None
+    reply_to_message_id: int = None
+    message_thread_id: int = None
+    self_destruct_time: int = None
+    self_destruct_in: float = None
+    auto_delete_in: float = None
+    via_bot_user_id: int = None
+    author_signature: str = None
+    media_album_id: int = None
+    restriction_reason: str = None
     content: MessageContent = None
     reply_markup: dict = None
+
+    def _assign_raw(self):
+        if self.raw.get('sender_id') and not self.raw.get('sender'):
+            self.sender = MessageSender(self.raw['sender_id'])
 
 
 @dataclass

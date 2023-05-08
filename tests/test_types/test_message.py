@@ -127,3 +127,16 @@ class MessageTestCase(TestCase):
 
         self.assertEqual(MessageSenderType.CHAT, message.sender.type)
         self.assertEqual(1394101816, message.sender.id)
+
+    def test_message_sender_backward_compatibility(self):
+        """Проверка messageSenderChat в Message.
+        С версий 1.8.х объект приходит в поле sender_id, вместо sender,
+        но в итоговом классе должен быть sender, как и раньше
+        """
+        message_dict = deepcopy(message_sender_chat)
+        message_dict['sender_id'] = message_dict.pop('sender')
+
+        message = Message(message_dict)
+
+        self.assertEqual(MessageSenderType.CHAT, message.sender.type)
+        self.assertEqual(1394101816, message.sender.id)

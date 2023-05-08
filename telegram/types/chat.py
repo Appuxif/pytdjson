@@ -17,14 +17,24 @@ class ChatPhotoInfo(RawDataclass):
 
 @dataclass
 class ChatPermissions(RawDataclass):
-    can_send_messages: bool = None
-    can_send_media_messages: bool = None
+    can_send_basic_messages: bool = None
+    can_send_audios: bool = None
+    can_send_documents: bool = None
+    can_send_photos: bool = None
+    can_send_videos: bool = None
+    can_send_video_notes: bool = None
+    can_send_voice_notes: bool = None
     can_send_polls: bool = None
     can_send_other_messages: bool = None
     can_add_web_page_previews: bool = None
     can_change_info: bool = None
     can_invite_users: bool = None
     can_pin_messages: bool = None
+    can_manage_topics: bool = None
+
+    # deprecated
+    can_send_messages: bool = None
+    can_send_media_messages: bool = None
 
 
 class ChatType(str, Enum):
@@ -34,6 +44,13 @@ class ChatType(str, Enum):
     PRIVATE = 'chatTypePrivate'
     SECRET = 'chatTypeSecret'
     SUPER_GROUP = 'chatTypeSupergroup'
+
+
+class ChatAvailableReactions(str, Enum):
+    """ChatAvailableReactions"""
+
+    ALL = 'chatAvailableReactionsAll'
+    SOME = 'chatAvailableReactionsSome'
 
 
 @dataclass
@@ -55,6 +72,7 @@ class Chat(RawDataclass):
     message_sender: MessageSender = None
 
     has_protected_content: bool = None
+    is_translatable: bool = None
     is_marked_as_unread: bool = None
     is_blocked: bool = None
     has_scheduled_messages: bool = None
@@ -66,8 +84,11 @@ class Chat(RawDataclass):
     last_read_inbox_message_id: int = None
     last_read_outbox_message_id: int = None
     unread_mention_count: int = None
+    unread_reaction_count: int = None
     # notification_settings: ChatNotificationSettings = None
-    message_ttl: int = None
+    available_reactions: ChatAvailableReactions = None
+    message_auto_delete_time: int = None
+    # background:chatBackground
     theme_name: str = None
     # action_bar: ChatActionBar = None
     # video_chat: VideoChat = None
@@ -75,6 +96,9 @@ class Chat(RawDataclass):
     reply_markup_message_id: int = None
     # draft_message: DraftMessage = None
     client_data: str = None
+
+    # deprecated
+    message_ttl: int = None
 
     def _assign_raw(self):
         self.type = ChatType(self.raw['type']['@type'])
@@ -96,3 +120,8 @@ class Chat(RawDataclass):
         message_sender_id = self.raw.get('message_sender_id')
         if message_sender_id:
             self.message_sender = MessageSender(self.raw['message_sender_id'])
+
+        if self.raw.get('available_reactions'):
+            self.available_reactions = ChatAvailableReactions(
+                self.raw['available_reactions']['@type']
+            )

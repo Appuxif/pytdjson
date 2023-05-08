@@ -14,17 +14,18 @@ from .user import User, UserFullInfo
 class AuthorizationState(str, Enum):
     """Состояния авторизации"""
 
-    CLOSED = 'authorizationStateClosed'
-    CLOSING = 'authorizationStateClosing'
-    LOGGING_OUT = 'authorizationStateLoggingOut'
-    READY = 'authorizationStateReady'
-    WAIT_CODE = 'authorizationStateWaitCode'
-    WAIT_ENCRYPTION_KEY = 'authorizationStateWaitEncryptionKey'
-    WAIT_OTHER_DEVICE_CONFIRMATION = 'authorizationStateWaitOtherDeviceConfirmation'
-    WAIT_PASSWORD = 'authorizationStateWaitPassword'
-    WAIT_PHONE_NUMBER = 'authorizationStateWaitPhoneNumber'
-    WAIT_REGISTRATION = 'authorizationStateWaitRegistration'
     WAIT_TDLIB_PARAMETERS = 'authorizationStateWaitTdlibParameters'
+    WAIT_PHONE_NUMBER = 'authorizationStateWaitPhoneNumber'
+    WAIT_EMAIL_ADDRESS = 'authorizationStateWaitEmailAddress'
+    WAIT_EMAIL_CODE = 'authorizationStateWaitEmailCode'
+    WAIT_CODE = 'authorizationStateWaitCode'
+    WAIT_OTHER_DEVICE_CONFIRMATION = 'authorizationStateWaitOtherDeviceConfirmation'
+    WAIT_REGISTRATION = 'authorizationStateWaitRegistration'
+    WAIT_PASSWORD = 'authorizationStateWaitPassword'
+    READY = 'authorizationStateReady'
+    LOGGING_OUT = 'authorizationStateLoggingOut'
+    CLOSING = 'authorizationStateClosing'
+    CLOSED = 'authorizationStateClosed'
 
 
 @dataclass

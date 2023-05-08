@@ -1,6 +1,7 @@
 import os
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional, Union
 
+from .types.message import ReactionType
 from .types.supergroup import SupergroupMembersFilter
 from .types.text import TextParseMode
 
@@ -49,32 +50,29 @@ class AuthAPI(BaseAPI):
 
         parameters = {
             "use_test_dc": self.client.settings.use_test_dc,
-            "api_id": self.client.settings.api_id,
-            "api_hash": self.client.settings.api_hash,
-            "device_model": self.client.settings.device_model,
-            "system_version": self.client.settings.system_version,
-            "application_version": self.client.settings.application_version,
-            "system_language_code": self.client.settings.system_language_code,
             "database_directory": os.path.join(
                 self.client.settings.files_directory, "database"
             ),
-            "use_file_database": self.client.settings.use_file_database,
-            "use_chat_info_database": self.client.settings.use_chat_info_database,
-            "use_message_database": self.client.settings.use_message_database,
-            "enable_storage_optimizer": self.client.settings.enable_storage_optimizer,
             "files_directory": os.path.join(
                 self.client.settings.files_directory, "files"
             ),
+            'database_encryption_key': self.client.settings.database_encryption_key,
+            "use_file_database": self.client.settings.use_file_database,
+            "use_chat_info_database": self.client.settings.use_chat_info_database,
+            "use_message_database": self.client.settings.use_message_database,
+            # 'use_secret_chats': False,
+            "api_id": self.client.settings.api_id,
+            "api_hash": self.client.settings.api_hash,
+            "system_language_code": self.client.settings.system_language_code,
+            "device_model": self.client.settings.device_model,
+            "system_version": self.client.settings.system_version,
+            "application_version": self.client.settings.application_version,
+            "enable_storage_optimizer": self.client.settings.enable_storage_optimizer,
+            # 'ignore_file_names': False,
         }
         return self.send_data(
             'setTdlibParameters',
-            parameters=parameters,
-        )
-
-    def check_database_encryption_key(self):
-        return self.send_data(
-            'checkDatabaseEncryptionKey',
-            encryption_key=self.client.settings.database_encryption_key,
+            **parameters,
         )
 
     def set_authentication_phone_number(self):
@@ -86,8 +84,11 @@ class AuthAPI(BaseAPI):
         return self.send_data(
             'setAuthenticationPhoneNumber',
             phone_number=phone,
-            allow_flash_call=False,
-            is_current_phone_number=True,
+            settings={
+                'allow_flash_call': False,
+                'allow_missed_call': False,
+                'is_current_phone_number': True,
+            },
         )
 
     def check_authentication_bot_token(self):
@@ -157,22 +158,20 @@ class API(BaseAPI):
 
     def get_chats(
         self,
+        # Для обратной совместимости
         offset_order: int = 0,
         offset_chat_id: int = 0,
         limit: int = 100,
-        chat_list: str = None,
+        chat_list: str = 'chatListMain',
     ):
         """Запрашивает список чатов"""
         return self.send_data(
             'getChats',
-            offset_order=offset_order,
-            offset_chat_id=offset_chat_id,
             limit=limit,
             chat_list=chat_list,
-            timeout=600,
         )
 
-    def load_chats(self, limit: int = 10, chat_list: str = None):
+    def load_chats(self, limit: int = 10, chat_list: str = 'chatListMain'):
         """Запрашивает загрузку чатов. Чаты будут приходить
         отдельными обновлениями через updateNewChat
         """
@@ -194,9 +193,9 @@ class API(BaseAPI):
         self.send_data(
             'getChatHistory',
             chat_id=chat_id,
-            limit=limit,
             from_message_id=from_message_id,
             offset=offset,
+            limit=limit,
             only_local=only_local,
         )
 
@@ -341,7 +340,13 @@ class API(BaseAPI):
             'logOut',
         )
 
-    def view_messages(self, chat_id: int, message_ids: list):
+    def view_messages(
+        self,
+        chat_id: int,
+        message_ids: list,
+        source: Optional[str] = None,
+        force_read: bool = False,
+    ):
         """Запрос на просмотр сообщений. Все непрочитанные сообщения
         в чате с указанным ID окажутся прочитанными
         """
@@ -349,6 +354,8 @@ class API(BaseAPI):
             'viewMessages',
             chat_id=chat_id,
             message_ids=message_ids,
+            source=source,
+            force_read=force_read,
         )
 
     def send_message(
@@ -361,6 +368,7 @@ class API(BaseAPI):
         disable_notification: bool = None,
         from_background: bool = None,
         send_date: int = None,
+        message_thread_id: int = 0,
     ):
         """Sends a message to a chat.
         The chat must be in the tdlib's database.
@@ -384,6 +392,7 @@ class API(BaseAPI):
         return self.send_data(
             'sendMessage',
             chat_id=chat_id,
+            message_thread_id=message_thread_id,
             reply_to_message_id=reply_to_message_id,
             input_message_content=input_message_content,
             options=_get_send_message_options(
@@ -426,11 +435,16 @@ class API(BaseAPI):
         disable_notification: bool = None,
         from_background: bool = None,
         send_date: int = None,
+        message_thread_id: int = 0,
+        send_copy: bool = False,
+        remove_caption: bool = False,
+        only_preview: bool = False,
     ):
         """Запрос на пересылку сообщения из одного чата в другой"""
         return self.send_data(
             'forwardMessages',
             chat_id=chat_id,
+            message_thread_id=message_thread_id,
             from_chat_id=from_chat_id,
             message_ids=message_ids,
             options=_get_send_message_options(
@@ -438,6 +452,9 @@ class API(BaseAPI):
                 from_background,
                 send_date,
             ),
+            send_copy=send_copy,
+            remove_caption=remove_caption,
+            only_preview=only_preview,
         )
 
     def ban_chat_member(self, chat_id: int, user_id: int, banned_until_date: int = 0):
@@ -449,12 +466,12 @@ class API(BaseAPI):
         """
         status = {
             '@type': 'chatMemberStatusBanned',
-            'banned_until_date': 0,
+            'banned_until_date': banned_until_date,
         }
         return self.send_data(
             'setChatMemberStatus',
             chat_id=chat_id,
-            user_id=user_id,
+            member_id={'@type': 'messageSenderUser', 'user_id': user_id},
             status=status,
         )
 
@@ -486,19 +503,23 @@ class API(BaseAPI):
             username=username,
         )
 
-    def create_private_chat(self, user_id: int):
+    def create_private_chat(self, user_id: int, force: bool = False):
         """Запрос на создание приватного чата с пользователем"""
         return self.send_data(
             'createPrivateChat',
             user_id=user_id,
+            force=force,
         )
 
-    def get_message_link(self, chat_id: int, message_id: int):
+    def get_message_link(
+        self, chat_id: int, message_id: int, in_message_thread: bool = False
+    ):
         """Запрос на генерацию ссылки для сообщения. Работает только для супергрупп"""
         return self.send_data(
             'getMessageLink',
             chat_id=chat_id,
             message_id=message_id,
+            in_message_thread=in_message_thread,
         )
 
     def add_chat_member(self, chat_id: int, user_id: int, forward_limit: int = 100):
@@ -521,6 +542,110 @@ class API(BaseAPI):
             'addChatMembers',
             chat_id=chat_id,
             user_ids=user_ids,
+        )
+
+    def get_message_available_reactions(
+        self, chat_id: int, message_id: int, row_size: int = 25
+    ):
+        """Запрос на доступные реакции к сообщению"""
+        row_size = min(max(row_size, 5), 25)
+        return self.send_data(
+            'getMessageAvailableReactions',
+            chat_id=chat_id,
+            message_id=message_id,
+            row_size=row_size,
+        )
+
+    def add_message_reaction(
+        self,
+        chat_id: int,
+        message_id: int,
+        reaction_type: ReactionType,
+        value: Union[str, int],
+        is_big: bool = False,
+        update_recent_reactions: bool = False,
+    ):
+        """Запрос на добавление реакции к сообщению"""
+        reaction_type = ReactionType(reaction_type)
+        return self.send_data(
+            'addMessageReaction',
+            chat_id=chat_id,
+            message_id=message_id,
+            reaction_type=reaction_type.build(value),
+            is_big=is_big,
+            update_recent_reactions=update_recent_reactions,
+        )
+
+    def remove_message_reaction(
+        self,
+        chat_id: int,
+        message_id: int,
+        reaction_type: ReactionType,
+        value: Union[str, int],
+    ):
+        """Запрос на удаление реакции к сообщению"""
+        reaction_type = ReactionType(reaction_type)
+        return self.send_data(
+            'removeMessageReaction',
+            chat_id=chat_id,
+            message_id=message_id,
+            reaction_type=reaction_type.build(value),
+        )
+
+    def get_message_added_reactions(
+        self,
+        chat_id: int,
+        message_id: int,
+        reaction_type: Optional[ReactionType] = None,
+        value: Union[str, int] = '',
+        offset: int = 0,
+        limit: int = 100,
+    ):
+        """Запрос на информацию о добавленных реакциях к сообщению"""
+        limit = min(limit, 100)
+        if reaction_type is not None:
+            reaction_type = ReactionType(reaction_type).build(value)
+        return self.send_data(
+            'getMessageAddedReactions',
+            chat_id=chat_id,
+            message_id=message_id,
+            reaction_type=reaction_type,
+            limit=limit,
+            offset=offset,
+        )
+
+    def get_storage_statistics(self, chat_limit: int = 10):
+        return self.send_data('getStorageStatistics', chat_limit=chat_limit)
+
+    def get_database_statistics(self):
+        return self.send_data('getDatabaseStatistics')
+
+    def optimize_storage(
+        self,
+        size: int = -1,
+        ttl: int = -1,
+        count: int = -1,
+        immunity_delay: int = -1,
+        file_types: Optional[list] = None,
+        chat_ids: Optional[list] = None,
+        exclude_chat_ids: Optional[list] = None,
+        return_deleted_file_statistics: bool = False,
+        chat_limit: int = 10,
+    ):
+        file_types = file_types or []
+        chat_ids = chat_ids or []
+        exclude_chat_ids = exclude_chat_ids or []
+        return self.send_data(
+            'optimizeStorage',
+            size=size,
+            ttl=ttl,
+            count=count,
+            immunity_delay=immunity_delay,
+            file_types=file_types,
+            chat_ids=chat_ids,
+            exclude_chat_ids=exclude_chat_ids,
+            return_deleted_file_statistics=return_deleted_file_statistics,
+            chat_limit=chat_limit,
         )
 
 

@@ -2,6 +2,7 @@
 
 A Python lightweight library to build telegram clients with no requirements.  
 It is a wrapper for Telegram's [tdlib](https://core.telegram.org/tdlib) based on asyncio.
+https://github.com/tdlib/td/blob/master/td/generate/scheme/td_api.tl
 
 # Getting Started
 

@@ -135,13 +135,22 @@ class AsyncTelegram:
         self._loop_tasks.append(task)
 
     def cancel_tasks(self):
+        task: asyncio.Task
         [task.cancel() for task in self._loop_tasks]
+
+        self._loop.run_until_complete(
+            asyncio.gather(*self._loop_tasks, return_exceptions=True)
+        )
+
         while self._loop_tasks:
             task = self._loop_tasks.pop()
             self.logger.debug('getting result: %s', task)
             try:
                 task.result()
-            except asyncio.exceptions.InvalidStateError:
+            except (
+                asyncio.exceptions.InvalidStateError,
+                asyncio.exceptions.CancelledError,
+            ):
                 pass
         self.logger.debug('all tasks canceled')
 
@@ -285,7 +294,6 @@ class Authorization:
         self.authorization_states_mapping = {
             None: self.api.get_authorization_state,
             AuthorizationState.WAIT_TDLIB_PARAMETERS: self.api.set_tdlib_parameters,
-            AuthorizationState.WAIT_ENCRYPTION_KEY: self.api.check_database_encryption_key,
             AuthorizationState.WAIT_PHONE_NUMBER: self.set_phone_number_or_bot_token,
             AuthorizationState.WAIT_CODE: self.api.check_authentication_code,
             AuthorizationState.WAIT_REGISTRATION: self.api.register_user,

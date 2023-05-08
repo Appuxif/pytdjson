@@ -28,6 +28,7 @@ class RawDataclassTestCase(TestCase):
         result = instance.asdict()
 
         expected = {
+            'class_type': 'TestRawDataclass',
             'raw': {
                 'enum_value': 1,
                 'value': 'test',

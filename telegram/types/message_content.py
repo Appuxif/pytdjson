@@ -17,6 +17,7 @@ class MessageText(MessageContentBase):
     """Текстовое сообщение"""
 
     text: FormattedText = None
+    # web_page: webPage = None
 
 
 @dataclass
@@ -25,6 +26,8 @@ class MessageAnimation(MessageContentBase):
 
     animation: AnimationFile = None
     caption: FormattedText = None
+    has_spoiler: bool = None
+    is_secret: bool = None
 
 
 @dataclass
@@ -49,13 +52,14 @@ class MessageInvoice(MessageContentBase):
 
     title: str = None
     description: str = None
-    # photo
+    # photo: photo
     currency: str = None
     total_amount: int = None
     start_parameter: str = None
     is_test: bool = None
     need_shipping_address: bool = None
     receipt_message_id: int = None
+    # extended_media: MessageExtendedMedia
 
 
 @dataclass
@@ -82,6 +86,7 @@ class MessagePhoto(MessageContentBase):
 
     photo: PhotoFile = None
     caption: FormattedText = None
+    has_spoiler: bool = None
     is_secret: bool = None
 
 

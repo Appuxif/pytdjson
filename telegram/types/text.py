@@ -8,24 +8,26 @@ from telegram.types.base import RawDataclass
 class TextEntityType(str, Enum):
     """Типы элементов форматирования текста"""
 
+    MENTION = 'textEntityTypeMention'
+    HASHTAG = 'textEntityTypeHashtag'
+    CASHTAG = 'textEntityTypeCashtag'
+    BOT_COMMAND = 'textEntityTypeBotCommand'
+    URL = 'textEntityTypeUrl'
+    EMAIL_ADDRESS = 'textEntityTypeEmailAddress'
+    PHONE_NUMBER = 'textEntityTypePhoneNumber'
     BANK_CARD_NUMBER = 'textEntityTypeBankCardNumber'
     BOLD = 'textEntityTypeBold'
-    BOT_COMMAND = 'textEntityTypeBotCommand'
-    CASHTAG = 'textEntityTypeCashtag'
-    CODE = 'textEntityTypeCode'
-    EMAIL_ADDRESS = 'textEntityTypeEmailAddress'
-    MEDIA_TIMESTAMP = 'textEntityTypeMediaTimestamp'
-    HASHTAG = 'textEntityTypeHashtag'
     ITALIC = 'textEntityTypeItalic'
-    MENTION = 'textEntityTypeMention'
-    MENTION_NAME = 'textEntityTypeMentionName'
-    PHONE_NUMBER = 'textEntityTypePhoneNumber'
+    UNDERLINE = 'textEntityTypeUnderline'
+    STRIKETHROUGH = 'textEntityTypeStrikethrough'
+    SPOILER = 'textEntityTypeSpoiler'
+    CODE = 'textEntityTypeCode'
     PRE = 'textEntityTypePre'
     PRE_CODE = 'textEntityTypePreCode'
-    STRIKETHROUGH = 'textEntityTypeStrikethrough'
     TEXT_URL = 'textEntityTypeTextUrl'
-    UNDERLINE = 'textEntityTypeUnderline'
-    URL = 'textEntityTypeUrl'
+    MENTION_NAME = 'textEntityTypeMentionName'
+    CUSTOM_EMOJI = 'textEntityTypeCustomEmoji'
+    MEDIA_TIMESTAMP = 'textEntityTypeMediaTimestamp'
 
 
 @dataclass
@@ -35,7 +37,11 @@ class TextEntity(RawDataclass):
     offset: int = None
     length: int = None
     type: TextEntityType = None
+
+    # type-specific
     user_id: int = None
+    custom_emoji_id: int = None
+    media_timestamp: int = None
     language: str = None
     url: str = None
 
@@ -48,6 +54,10 @@ class TextEntity(RawDataclass):
             self.language = _type['language']
         elif self.type == TextEntityType.TEXT_URL:
             self.url = _type['url']
+        elif self.type == TextEntityType.CUSTOM_EMOJI:
+            self.custom_emoji_id = _type['custom_emoji_id']
+        elif self.type == TextEntityType.MEDIA_TIMESTAMP:
+            self.media_timestamp = _type['media_timestamp']
 
 
 @dataclass

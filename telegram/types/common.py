@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from telegram.types.base import RawDataclass
 
@@ -33,3 +34,19 @@ class Venue(RawDataclass):
     provider: str = None
     id: str = None
     type: str = None
+
+
+@dataclass
+class Usernames(RawDataclass):
+    """Usernames"""
+
+    active_usernames: list = None
+    disabled_usernames: list = None
+    editable_username: list = None
+
+    @staticmethod
+    def get_username(raw: dict) -> Optional[str]:
+        if not raw.get('username') and raw.get('usernames'):
+            active_usernames = raw['usernames'].get('active_usernames')
+            if isinstance(active_usernames) and active_usernames:
+                return raw['usernames']['active_usernames'][0]

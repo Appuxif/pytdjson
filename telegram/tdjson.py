@@ -1,6 +1,6 @@
 import json
 import logging
-from ctypes import CDLL, CFUNCTYPE, c_char_p, c_double, c_int, c_longlong, c_void_p
+from ctypes import CDLL, CFUNCTYPE, c_char_p, c_double, c_int, c_void_p
 from typing import Any, Dict, Optional, Union
 
 import pkg_resources
@@ -22,72 +22,72 @@ class TDJson:
         self._build_client(library_path, verbosity)
 
     def __del__(self) -> None:
-        if hasattr(self, '_tdjson') and hasattr(
-            self._tdjson, '_td_json_client_destroy'
-        ):
-            self.stop()
+        self.stop()
 
     def _build_client(self, library_path: str, verbosity: int) -> None:
         self._tdjson = CDLL(library_path)
 
         # load TDLib functions from shared library
-        self._td_json_client_create = self._tdjson.td_json_client_create
-        self._td_json_client_create.restype = c_void_p
-        self._td_json_client_create.argtypes = []
+        self._td_create_client_id = self._tdjson.td_create_client_id
+        self._td_create_client_id.restype = c_int
+        self._td_create_client_id.argtypes = []
 
-        self.td_json_client = self._td_json_client_create()
+        self.td_client_id = self._td_create_client_id()
 
-        self._td_json_client_receive = self._tdjson.td_json_client_receive
-        self._td_json_client_receive.restype = c_char_p
-        self._td_json_client_receive.argtypes = [c_void_p, c_double]
+        self._td_receive = self._tdjson.td_receive
+        self._td_receive.restype = c_char_p
+        self._td_receive.argtypes = [c_double]
 
-        self._td_json_client_send = self._tdjson.td_json_client_send
-        self._td_json_client_send.restype = None
-        self._td_json_client_send.argtypes = [c_void_p, c_char_p]
+        self._td_send = self._tdjson.td_send
+        self._td_send.restype = None
+        self._td_send.argtypes = [c_int, c_char_p]
 
-        self._td_json_client_execute = self._tdjson.td_json_client_execute
-        self._td_json_client_execute.restype = c_char_p
-        self._td_json_client_execute.argtypes = [c_void_p, c_char_p]
+        self._td_execute = self._tdjson.td_execute
+        self._td_execute.restype = c_char_p
+        self._td_execute.argtypes = [c_char_p]
 
         self._td_json_client_destroy = self._tdjson.td_json_client_destroy
         self._td_json_client_destroy.restype = None
         self._td_json_client_destroy.argtypes = [c_void_p]
 
-        self._td_set_log_file_path = self._tdjson.td_set_log_file_path
-        self._td_set_log_file_path.restype = c_int
-        self._td_set_log_file_path.argtypes = [c_char_p]
-
-        self._td_set_log_max_file_size = self._tdjson.td_set_log_max_file_size
-        self._td_set_log_max_file_size.restype = None
-        self._td_set_log_max_file_size.argtypes = [c_longlong]
-
-        self._td_set_log_verbosity_level = self._tdjson.td_set_log_verbosity_level
-        self._td_set_log_verbosity_level.restype = None
-        self._td_set_log_verbosity_level.argtypes = [c_int]
-
-        self._td_set_log_verbosity_level(verbosity)
-
-        fatal_error_callback_type = CFUNCTYPE(None, c_char_p)
-
-        self._td_set_log_fatal_error_callback = (
-            self._tdjson.td_set_log_fatal_error_callback
+        # Segmentation fault (core dumped)
+        # log_message_callback_type = CFUNCTYPE(None, c_int, c_char_p)
+        # self._td_set_log_message_callback = self._tdjson.td_set_log_message_callback
+        # self._td_set_log_message_callback.restype = None
+        # self._td_set_log_message_callback.argtypes = [c_int, log_message_callback_type]
+        #
+        # # initialize TDLib log with desired parameters
+        # @log_message_callback_type
+        # def on_log_message_callback(verbosity_level, message):
+        #     logger.debug('%s: %s', verbosity_level, message)
+        #     if verbosity_level == 0:
+        #         logger.error('TDLib fatal error: %s', message)
+        #
+        # self._td_set_log_message_callback(2, on_log_message_callback)
+        self.td_execute(
+            {'@type': 'setLogVerbosityLevel', 'new_verbosity_level': verbosity}
         )
-        self._td_set_log_fatal_error_callback.restype = None
-        self._td_set_log_fatal_error_callback.argtypes = [fatal_error_callback_type]
 
-        # initialize TDLib log with desired parameters
-        def on_fatal_error_callback(error_message: str) -> None:
-            logger.error('TDLib fatal error: %s', error_message)
+        # another test for TDLib execute method
+        logger.debug(
+            self.td_execute(
+                {
+                    '@type': 'getTextEntities',
+                    'text': '@telegram /test_command https://telegram.org telegram.me',
+                    '@extra': ['5', 7.0, 'a'],
+                }
+            )
+        )
 
-        c_on_fatal_error_callback = fatal_error_callback_type(on_fatal_error_callback)
-        self._td_set_log_fatal_error_callback(c_on_fatal_error_callback)
+        # start the client by sending a request to it
+        self.send({'@type': 'getOption', 'name': 'version'})
 
     def send(self, query: Dict[Any, Any]) -> None:
         dumped_query = json.dumps(query).encode('utf-8')
-        self._td_json_client_send(self.td_json_client, dumped_query)
+        self._td_send(self.td_client_id, dumped_query)
 
     def receive(self) -> Union[None, Dict[Any, Any]]:
-        result_str = self._td_json_client_receive(self.td_json_client, 1.0)
+        result_str = self._td_receive(1.0)
 
         if result_str:
             result: Dict[Any, Any] = json.loads(result_str.decode('utf-8'))
@@ -97,7 +97,7 @@ class TDJson:
 
     def td_execute(self, query: Dict[Any, Any]) -> Union[Dict[Any, Any], Any]:
         dumped_query = json.dumps(query).encode('utf-8')
-        result_str = self._td_json_client_execute(self.td_json_client, dumped_query)
+        result_str = self._td_execute(dumped_query)
 
         if result_str:
             result: Dict[Any, Any] = json.loads(result_str.decode('utf-8'))
@@ -106,4 +106,7 @@ class TDJson:
         return None
 
     def stop(self) -> None:
-        self._td_json_client_destroy(self.td_json_client)
+        if hasattr(self, '_tdjson') and hasattr(
+            self._tdjson, '_td_json_client_destroy'
+        ):
+            self._td_json_client_destroy(self.td_client_id)

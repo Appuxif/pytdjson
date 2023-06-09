@@ -78,3 +78,37 @@ class PhotoFile(RawDataclass):
 
     def _assign_raw(self):
         self.sizes = [PhotoSize(size) for size in self.raw['sizes']]
+
+
+@dataclass
+class VideoFile(RawDataclass):
+    """Видео-файл"""
+
+    duration: int = None
+    width: int = None
+    height: int = None
+    file_name: str = None
+    mime_type: str = None
+    has_stickers: bool = None
+    supports_streaming: bool = None
+    video: File = None
+
+
+@dataclass
+class VideoNote(RawDataclass):
+    """Видео-заметка"""
+
+    duration: int = None
+    # waveform: bytes = None
+    length: int = None
+    video: File = None
+
+
+@dataclass
+class VoiceNote(RawDataclass):
+    """Файл голосового сообщения"""
+
+    duration: int = None
+    # waveform: bytes = None
+    mime_type: str = None
+    voice: File = None

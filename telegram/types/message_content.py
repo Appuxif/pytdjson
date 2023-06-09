@@ -2,7 +2,15 @@ from dataclasses import dataclass
 
 from telegram.types.base import ObjectBuilder, RawDataclass
 from telegram.types.common import Contact, Location, Venue
-from telegram.types.files import AnimationFile, AudioFile, DocumentFile, PhotoFile
+from telegram.types.files import (
+    AnimationFile,
+    AudioFile,
+    DocumentFile,
+    PhotoFile,
+    VideoFile,
+    VideoNote,
+    VoiceNote,
+)
 from telegram.types.poll import Poll
 from telegram.types.text import FormattedText
 
@@ -118,17 +126,29 @@ class MessageChatAddMembers(MessageContentBase):
 
 @dataclass
 class MessageVideo(MessageContentBase):
-    """TODO: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_video.html"""
+    """Сообщение-видео"""
+
+    video: VideoFile = None
+    caption: FormattedText = None
+    is_secret: bool = False
 
 
 @dataclass
 class MessageVideoNote(MessageContentBase):
-    """TODO: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_video_note.html"""
+    """Видео-Заметка"""
+
+    video_note: VideoNote = None
+    is_viewed: bool = False
+    is_secret: bool = False
 
 
 @dataclass
 class MessageVoiceNote(MessageContentBase):
-    """TODO: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_voice_note.html"""
+    """Голосовое сообщение"""
+
+    voice_note: VoiceNote = None
+    caption: FormattedText = None
+    is_listened: bool = False
 
 
 class MessageContentBuilder(ObjectBuilder):

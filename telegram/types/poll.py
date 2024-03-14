@@ -3,6 +3,7 @@ from enum import Enum
 from typing import List
 
 from telegram.types.base import RawDataclass, default_getter
+from telegram.types.message import MessageSender
 from telegram.types.text import FormattedText
 
 
@@ -35,9 +36,13 @@ class Poll(RawDataclass):
         metadata={'getter': lambda options: [PollOption(opt) for opt in options]},
     )
     total_voter_count: int = None
-    recent_voter_user_ids: List[int] = field(
+    recent_voter_user_ids: List[int] = field(  # deprecated
         default=None,
         metadata={'getter': default_getter},
+    )
+    recent_voter_ids: List[MessageSender] = field(
+        default=None,
+        metadata={'getter': lambda value: [MessageSender(raw) for raw in value]},
     )
     is_anonymous: bool = None
     type: PollType = field(

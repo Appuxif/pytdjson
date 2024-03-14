@@ -28,6 +28,7 @@ class TextEntityType(str, Enum):
     MENTION_NAME = 'textEntityTypeMentionName'
     CUSTOM_EMOJI = 'textEntityTypeCustomEmoji'
     MEDIA_TIMESTAMP = 'textEntityTypeMediaTimestamp'
+    BLOCK_QUOTE = 'textEntityTypeBlockQuote'
 
 
 @dataclass

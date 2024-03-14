@@ -80,7 +80,10 @@ class User(RawDataclass):
 class UserFullInfo(RawDataclass):
     """Дополнительная информация о пользователе"""
 
-    is_blocked: bool = None
     bio: str = None
     share_text: str = None
     description: str = None
+    # block_list:BlockList
+
+    # deprecated
+    is_blocked: bool = None

@@ -67,7 +67,7 @@ class AuthAPI(BaseAPI):
             "device_model": self.client.settings.device_model,
             "system_version": self.client.settings.system_version,
             "application_version": self.client.settings.application_version,
-            "enable_storage_optimizer": self.client.settings.enable_storage_optimizer,
+            # "enable_storage_optimizer": self.client.settings.enable_storage_optimizer,  # deleted in 1.8.26
             # 'ignore_file_names': False,
         }
         return self.send_data(
@@ -126,6 +126,7 @@ class AuthAPI(BaseAPI):
             'registerUser',
             first_name=str(first_name),
             last_name=str(last_name or ''),
+            disable_notification=True,
         )
 
     def check_authentication_password(self):
@@ -386,14 +387,23 @@ class API(BaseAPI):
         input_message_content = {
             '@type': 'inputMessageText',
             'text': formatted_text,
-            'disable_web_page_preview': disable_web_page_preview,
+            'disable_web_page_preview': {
+                '@type': 'linkPreviewOptions',
+                'is_disabled': disable_web_page_preview,
+            },
+            'clear_draft': True,
         }
 
         return self.send_data(
             'sendMessage',
             chat_id=chat_id,
             message_thread_id=message_thread_id,
-            reply_to_message_id=reply_to_message_id,
+            reply_to={
+                '@type': 'InputMessageReplyToMessage',
+                'chat_id': 0,  # pass 0 if the message to be replied is in the same chat
+                'message_id': reply_to_message_id,
+                'quote': None,
+            },
             input_message_content=input_message_content,
             options=_get_send_message_options(
                 disable_notification,
@@ -416,6 +426,7 @@ class API(BaseAPI):
             'resendMessages',
             chat_id=chat_id,
             message_ids=message_ids,
+            quote=None,
         )
 
     def delete_messages(self, chat_id, message_ids: list):
@@ -438,7 +449,7 @@ class API(BaseAPI):
         message_thread_id: int = 0,
         send_copy: bool = False,
         remove_caption: bool = False,
-        only_preview: bool = False,
+        only_preview: bool = False,  # deprecated  # noqa
     ):
         """Запрос на пересылку сообщения из одного чата в другой"""
         return self.send_data(
@@ -454,7 +465,6 @@ class API(BaseAPI):
             ),
             send_copy=send_copy,
             remove_caption=remove_caption,
-            only_preview=only_preview,
         )
 
     def ban_chat_member(self, chat_id: int, user_id: int, banned_until_date: int = 0):

@@ -14,6 +14,7 @@ class Supergroup(RawDataclass):
     date: int = None
     # status: ChatMemberStatus
     member_count: int = None
+    # boost_level: int = None
     has_linked_chat: bool = None
     has_location: bool = None
     sign_messages: bool = None
@@ -27,6 +28,8 @@ class Supergroup(RawDataclass):
     restriction_reason: str = None
     is_scam: bool = None
     is_fake: bool = None
+    # has_active_stories: bool = None
+    # has_unread_active_stories: bool = None
 
     # Для обратной совместимости
     username: str = None
@@ -51,19 +54,25 @@ class SupergroupFullInfo(RawDataclass):
     can_get_members: bool = None
     has_hidden_members: bool = None
     can_hide_members: bool = None
-    can_set_username: bool = None
     can_set_sticker_set: bool = None
     can_set_location: bool = None
     can_get_statistics: bool = None
     can_toggle_aggressive_anti_spam: bool = None
     is_all_history_available: bool = None
+    # has_pinned_stories: bool = None
     has_aggressive_anti_spam_enabled: bool = None
-    sticker_set_id: int = None
     # location: ChatLocation = None
     # invite_link: ChatInviteLink = None
     # bot_commands: list[BotCommands] = None
+    # my_boost_count: int = None
+    # unrestrict_boost_count: int = None
     upgraded_from_basic_group_id: int = None
     upgraded_from_max_message_id: int = None
+    sticker_set_id: int = None
+    # custom_emoji_sticker_set_id: int = None
+
+    # deprecated
+    can_set_username: bool = None
 
 
 class SupergroupMembersFilter(str, Enum):

@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import List
 
 from telegram.types.base import RawDataclass
 from telegram.types.files import File
@@ -30,9 +29,10 @@ class ChatPermissions(RawDataclass):
     can_change_info: bool = None
     can_invite_users: bool = None
     can_pin_messages: bool = None
-    can_manage_topics: bool = None
+    can_create_topics: bool = None
 
     # deprecated
+    can_manage_topics: bool = None
     can_send_messages: bool = None
     can_send_media_messages: bool = None
 
@@ -56,25 +56,23 @@ class ChatAvailableReactions(str, Enum):
 @dataclass
 class Chat(RawDataclass):
     id: int = None
-
     type: ChatType = None
-    basic_group_id: int = None
-    supergroup_id: int = None
-    is_channel: bool = False
-    secret_chat_id: int = None
-    user_id: int = None
-
     title: str = None
     photo: ChatPhotoInfo = None
+    accent_color_id: int = None
+    background_custom_emoji_id: int = None
+    profile_accent_color_id: int = None
+    profile_background_custom_emoji_id: int = None
     permissions: ChatPermissions = None
     last_message: Message = None
-    positions: list = None
+    # positions: list = None
+    # chat_lists: list = None
     message_sender: MessageSender = None
-
+    # block_list: BlockList = None
     has_protected_content: bool = None
     is_translatable: bool = None
     is_marked_as_unread: bool = None
-    is_blocked: bool = None
+    view_as_topics: bool = None
     has_scheduled_messages: bool = None
     can_be_deleted_only_for_self: bool = None
     can_be_deleted_for_all_users: bool = None
@@ -88,6 +86,7 @@ class Chat(RawDataclass):
     # notification_settings: ChatNotificationSettings = None
     available_reactions: ChatAvailableReactions = None
     message_auto_delete_time: int = None
+    # emoji_status: emojiStatus
     # background:chatBackground
     theme_name: str = None
     # action_bar: ChatActionBar = None
@@ -97,8 +96,12 @@ class Chat(RawDataclass):
     # draft_message: DraftMessage = None
     client_data: str = None
 
-    # deprecated
-    message_ttl: int = None
+    # for back compatibility
+    basic_group_id: int = None
+    supergroup_id: int = None
+    is_channel: bool = False
+    secret_chat_id: int = None
+    user_id: int = None
 
     def _assign_raw(self):
         self.type = ChatType(self.raw['type']['@type'])

@@ -26,6 +26,7 @@ class MessageText(MessageContentBase):
 
     text: FormattedText = None
     # web_page: webPage = None
+    # link_preview_options: linkPreviewOptions
 
 
 @dataclass

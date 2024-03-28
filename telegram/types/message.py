@@ -6,19 +6,12 @@ from telegram.types.base import RawDataclass
 from telegram.types.message_content import MessageContent
 
 __all__ = (
-    'MessageSenderType',
-    'MessageSender',
     'MessageForwardInfo',
     'Message',
     'MessageLink',
 )
 
-
-class MessageSenderType(str, Enum):
-    """Тип отправителя"""
-
-    CHAT = 'messageSenderChat'
-    USER = 'messageSenderUser'
+from telegram.types.message_sender import MessageSender
 
 
 class ReactionType(str, Enum):
@@ -34,21 +27,6 @@ class ReactionType(str, Enum):
         if self == ReactionType.CUSTOM:
             data['custom_emoji_id'] = value
         return data
-
-
-@dataclass
-class MessageSender(RawDataclass):
-    """Отправитель сообщения"""
-
-    type: MessageSenderType = None
-    id: int = None
-
-    def _assign_raw(self):
-        self.type = MessageSenderType(self.raw['@type'])
-        if self.type == MessageSenderType.USER:
-            self.id = self.raw['user_id']
-        else:
-            self.id = self.raw['chat_id']
 
 
 @dataclass

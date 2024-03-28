@@ -1,8 +1,9 @@
 from copy import deepcopy
 from unittest import TestCase
 
-from telegram.types.message import Message, MessageForwardInfo, MessageSenderType
+from telegram.types.message import Message, MessageForwardInfo
 from telegram.types.message_content import MessageText
+from telegram.types.message_sender import MessageSenderType
 
 message_base = {
     '@type': 'message',

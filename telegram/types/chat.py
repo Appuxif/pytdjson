@@ -3,7 +3,8 @@ from enum import Enum
 
 from telegram.types.base import RawDataclass
 from telegram.types.files import File
-from telegram.types.message import Message, MessageSender
+from telegram.types.message import Message
+from telegram.types.message_sender import MessageSender
 
 
 @dataclass

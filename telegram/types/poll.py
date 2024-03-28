@@ -3,7 +3,7 @@ from enum import Enum
 from typing import List
 
 from telegram.types.base import RawDataclass, default_getter
-from telegram.types.message import MessageSender
+from telegram.types.message_sender import MessageSender
 from telegram.types.text import FormattedText
 
 

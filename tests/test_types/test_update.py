@@ -4,7 +4,7 @@ from unittest.mock import patch
 from telegram.types.base import RawDataclass
 from telegram.types.chat import ChatType
 from telegram.types.files import File
-from telegram.types.message import MessageSenderType
+from telegram.types.message_sender import MessageSenderType
 from telegram.types.update import (
     AuthorizationState,
     Update,

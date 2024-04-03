@@ -1,5 +1,5 @@
 import os
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from .types.message import ReactionType
 from .types.supergroup import SupergroupMembersFilter
@@ -394,16 +394,20 @@ class API(BaseAPI):
             'clear_draft': True,
         }
 
+        reply_to: Optional[Dict[Any, Any]] = None
+        if reply_to_message_id:
+            reply_to = {
+                '@type': 'inputMessageReplyToMessage',
+                'chat_id': 0,  # pass 0 if the message to be replied is in the same chat
+                'message_id': reply_to_message_id,
+                'quote': None,
+            }
+
         return self.send_data(
             'sendMessage',
             chat_id=chat_id,
             message_thread_id=message_thread_id,
-            reply_to={
-                '@type': 'InputMessageReplyToMessage',
-                'chat_id': 0,  # pass 0 if the message to be replied is in the same chat
-                'message_id': reply_to_message_id,
-                'quote': None,
-            },
+            reply_to=reply_to,
             input_message_content=input_message_content,
             options=_get_send_message_options(
                 disable_notification,

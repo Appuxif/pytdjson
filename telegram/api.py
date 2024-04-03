@@ -179,7 +179,7 @@ class API(BaseAPI):
         return self.send_data(
             'loadChats',
             limit=limit,
-            chat_list=chat_list,
+            chat_list={'@type': chat_list},
         )
 
     def get_chat_history(

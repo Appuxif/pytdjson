@@ -42,7 +42,7 @@ class Usernames(RawDataclass):
 
     active_usernames: list = None
     disabled_usernames: list = None
-    editable_username: list = None
+    editable_username: str = None
 
     @staticmethod
     def get_username(raw: dict) -> Optional[str]:

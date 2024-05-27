@@ -1,6 +1,15 @@
 import os
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
+from .exceptions import (
+    ApiHashNotSet,
+    ApiIdNotSet,
+    AuthCodeNotSet,
+    FirstNameNotSet,
+    PasswordNotSet,
+    PhoneNotSet,
+    TokenNotSet,
+)
 from .types.message import ReactionType
 from .types.supergroup import SupergroupMembersFilter
 from .types.text import TextParseMode
@@ -43,10 +52,10 @@ class AuthAPI(BaseAPI):
     def set_tdlib_parameters(self):
 
         if not self.client.settings.api_id:
-            raise ValueError('api_id not set')
+            raise ApiIdNotSet()
 
         if not self.client.settings.api_hash:
-            raise ValueError('api_hash not set')
+            raise ApiHashNotSet()
 
         parameters = {
             "use_test_dc": self.client.settings.use_test_dc,
@@ -79,7 +88,7 @@ class AuthAPI(BaseAPI):
         phone = self.client.settings.phone
 
         if not phone:
-            raise ValueError('phone not set')
+            raise PhoneNotSet()
 
         return self.send_data(
             'setAuthenticationPhoneNumber',
@@ -95,7 +104,7 @@ class AuthAPI(BaseAPI):
         token = self.client.settings.bot_token
 
         if not token:
-            raise ValueError('token not set')
+            raise TokenNotSet()
 
         return self.send_data(
             'checkAuthenticationBotToken',
@@ -107,7 +116,7 @@ class AuthAPI(BaseAPI):
         auth_code = self.client.settings.auth_code
 
         if not auth_code:
-            raise ValueError('auth_code not set')
+            raise AuthCodeNotSet()
 
         return self.send_data(
             'checkAuthenticationCode',
@@ -120,7 +129,7 @@ class AuthAPI(BaseAPI):
         last_name = self.client.settings.last_name
 
         if not first_name:
-            raise ValueError('first name not set')
+            raise FirstNameNotSet()
 
         return self.send_data(
             'registerUser',
@@ -133,7 +142,7 @@ class AuthAPI(BaseAPI):
         password = self.client.settings.password
 
         if not password:
-            raise ValueError('password not set')
+            raise PasswordNotSet()
 
         return self.send_data(
             'checkAuthenticationPassword',

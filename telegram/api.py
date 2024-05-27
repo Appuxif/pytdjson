@@ -46,7 +46,7 @@ class AuthAPI(BaseAPI):
             raise ValueError('api_id not set')
 
         if not self.client.settings.api_hash:
-            raise ValueError('api_id not set')
+            raise ValueError('api_hash not set')
 
         parameters = {
             "use_test_dc": self.client.settings.use_test_dc,

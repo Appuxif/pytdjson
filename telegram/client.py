@@ -5,7 +5,7 @@ from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
 from types import FrameType
-from typing import Any, Callable, DefaultDict, Dict, List, Optional
+from typing import Any, Callable, Coroutine, DefaultDict, Dict, List, Optional
 from uuid import uuid4
 
 from . import VERSION
@@ -48,11 +48,24 @@ class Settings:
     update_timeout: int = 30  # Время ожидания ответа от tdlib
     tdjson_workers: int = 3  # Количество воркеров, который слушают tdlib
     tdjson_worker_tasks: int = (
-        30  # Количество корутин, одновременно обрабатываемых воркером
+        # deprecated
+        # Количество корутин, одновременно обрабатываемых воркером
+        30
+    )
+    tdjson_worker_tasks_threshold: int = (
+        # Количество секунд, через которое все корутины будут обработаны,
+        # независимо от tdjson_worker_tasks
+        5
     )
     handlers_workers: int = 3  # Количество воркеров, которые обрабатывают обновления
     handlers_worker_tasks: int = (
-        30  # Количество корутин, одновременно обрабатываемых воркером
+        # Количество корутин, одновременно обрабатываемых воркером
+        30
+    )
+    handlers_worker_tasks_threshold: int = (
+        # Количество секунд, через которое все корутины будут обработаны,
+        # независимо от handlers_worker_tasks
+        5
     )
 
     def __post_init__(self):
@@ -112,10 +125,10 @@ class AsyncTelegram:
     def run(self):
         self.logger.debug('running...')
         self.is_enabled = True
-        for _ in range(self.settings.tdjson_workers):
-            self.create_task(self._tdjson_worker())
-        for _ in range(self.settings.handlers_workers):
-            self.create_task(self._handlers_worker())
+        for i in range(self.settings.tdjson_workers):
+            self.create_task(self._tdjson_worker(i))
+        for i in range(self.settings.handlers_workers):
+            self.create_task(self._handlers_worker(i))
         self.run_forever()
 
     def run_forever(self):
@@ -133,14 +146,18 @@ class AsyncTelegram:
                 self._loop.close()
                 self._tdjson.stop()
 
-    def create_task(self, coro):
-        self.logger.debug(f'created task: {coro.__name__}')
+    def wrap_task(self, coro: Coroutine[Any, None, None]) -> asyncio.Task:
         task = self._loop.create_task(coro)
 
         def handler(t):
             t.result()
 
         task.add_done_callback(handler)
+        return task
+
+    def create_task(self, coro: Coroutine[Any, None, None]) -> None:
+        # self.logger.debug(f'created task: {coro.__name__}')
+        task = self.wrap_task(coro)
         self._loop_tasks.append(task)
 
     def cancel_tasks(self):
@@ -186,31 +203,40 @@ class AsyncTelegram:
     def kill(self):
         self.stop(kill=True)
 
-    async def _tdjson_worker(self) -> None:
-        # self.logger.debug('tdjson worker starting...')
-        loop = asyncio.get_running_loop()
+    async def _tdjson_worker(self, i: int = 0) -> None:
+        self.logger.debug('tdjson worker %s starting...', i)
         tasks = []
 
+        async def _inner(_update):
+            await self._update_async_result(update)
+            await self._run_handlers(update)
+
+        last_try = self._loop.time() - self.settings.tdjson_worker_tasks_threshold
         while self.is_enabled:
-            if len(tasks) >= self.settings.tdjson_worker_tasks:
+            if (
+                len(tasks) >= self.settings.tdjson_worker_tasks
+                or self._loop.time() - last_try
+                > self.settings.tdjson_worker_tasks_threshold
+            ):
                 await asyncio.gather(*tasks)
                 tasks.clear()
+                last_try = self._loop.time()
 
-            update = await loop.run_in_executor(
+            update = await self._loop.run_in_executor(
                 self._tdjson_executor, self._tdjson.receive
             )
 
             if update:
-                task1 = loop.create_task(self._update_async_result(update))
-                task2 = loop.create_task(self._run_handlers(update))
-                tasks.extend([task1, task2])
+                task = self.wrap_task(_inner(update))
+                tasks.append(task)
+
+        await asyncio.gather(*tasks)
 
     def _prepare_update(self, update: dict):
         return Update(update)
 
-    async def _handlers_worker(self) -> None:
-        # self.logger.debug('handlers worker starting...')
-        loop = asyncio.get_running_loop()
+    async def _handlers_worker(self, i: int = 0) -> None:
+        self.logger.debug('handlers worker %s starting...', i)
         tasks = []
 
         async def _inner(_handler, _update):
@@ -218,24 +244,36 @@ class AsyncTelegram:
                 if asyncio.iscoroutinefunction(handler):
                     await handler(update)
                 else:
-                    await loop.run_in_executor(self._executor, handler, update)
+                    await self._loop.run_in_executor(self._executor, handler, update)
             finally:
                 self.handler_workers_queue.task_done()
 
+        last_try = self._loop.time() - self.settings.handlers_worker_tasks_threshold
         while self.is_enabled:
-            if len(tasks) >= self.settings.handlers_worker_tasks:
+            if (
+                len(tasks) >= self.settings.handlers_worker_tasks
+                or self._loop.time() - last_try
+                > self.settings.handlers_worker_tasks_threshold
+            ):
                 await asyncio.gather(*tasks)
                 tasks.clear()
+                last_try = self._loop.time()
 
-            handler, update = await self.handler_workers_queue.get()
+            try:
+                handler, update = self.handler_workers_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                await asyncio.sleep(0.1)
+                continue
 
             try:
                 update = self._prepare_update(update)
-                task = loop.create_task(_inner(handler, update))
+                task = self.wrap_task(_inner(handler, update))
                 tasks.append(task)
             except:
                 self.handler_workers_queue.task_done()
                 raise
+
+        await asyncio.gather(*tasks)
 
     async def _update_async_result(self, update: Dict[Any, Any]) -> None:
 

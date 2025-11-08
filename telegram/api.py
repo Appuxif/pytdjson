@@ -168,7 +168,6 @@ class API(BaseAPI):
 
     def get_chats(
         self,
-        # Для обратной совместимости
         offset_order: int = 0,
         offset_chat_id: int = 0,
         limit: int = 100,
@@ -178,7 +177,7 @@ class API(BaseAPI):
         return self.send_data(
             'getChats',
             limit=limit,
-            chat_list=chat_list,
+            chat_list={'@type': chat_list},
         )
 
     def load_chats(self, limit: int = 10, chat_list: str = 'chatListMain'):
@@ -209,18 +208,18 @@ class API(BaseAPI):
             only_local=only_local,
         )
 
-    def get_web_page_instant_view(self, url: str, force_full: bool = False):
+    def get_web_page_instant_view(self, url: str, only_local: bool = False):
         """Use this method to request instant preview of a webpage.
         Returns error with 404 if there is no preview for this webpage.
 
         :param url: URL of a webpage
-        :param force_full: If true, the full instant view
-            for the web page will be returned
+        :param only_local: Pass true to get only locally available
+            information without sending network requests
         """
         return self.send_data(
             'getWebPageInstantView',
             url=url,
-            force_full=force_full,
+            only_local=only_local,
         )
 
     def get_user(self, user_id: int):
@@ -251,21 +250,19 @@ class API(BaseAPI):
         offset: int = 0,
         limit: int = 200,
         query: str = '',
-        message_thread_id: int = None,
+        message_thread_id: Optional[int] = None,
     ):
         """Запрос на получение списка пользователей супергруппы.
 
         query используется не во всех фильтрах.
-        message_thread_id только в SupergroupMembersFilter.MENTION.
+        message_thread_id - не используется, оставлено для обратной совместимости
         """
         filter_type = SupergroupMembersFilter(filter_type)
         limit = min(limit, 200)
 
-        filter_body = {'@type': filter_type.value}
+        filter_body: dict[str, Any] = {'@type': filter_type.value}
         if query and filter_type in SupergroupMembersFilter.with_query():
             filter_body['query'] = query
-        if message_thread_id and filter_type in SupergroupMembersFilter.with_thread():
-            filter_body['message_thread_id'] = message_thread_id
 
         return self.send_data(
             'getSupergroupMembers',
@@ -364,7 +361,7 @@ class API(BaseAPI):
             'viewMessages',
             chat_id=chat_id,
             message_ids=message_ids,
-            source=source,
+            source={'@type': source} if source else None,
             force_read=force_read,
         )
 
@@ -378,13 +375,15 @@ class API(BaseAPI):
         disable_notification: bool = None,
         from_background: bool = None,
         send_date: int = None,
-        message_thread_id: int = 0,
+        message_thread_id: Optional[int] = None,
     ):
         """Sends a message to a chat.
         The chat must be in the tdlib's database.
         If there is no chat in the DB, tdlib returns an error.
         Chat is being saved to the database when the client
         receives a message or when you call the `get_chats` method.
+
+        message_thread_id - не используется, оставлено для обратной совместимости
         """
         formatted_text = {'@type': 'formattedText', 'text': text}
 
@@ -396,7 +395,7 @@ class API(BaseAPI):
         input_message_content = {
             '@type': 'inputMessageText',
             'text': formatted_text,
-            'disable_web_page_preview': {
+            'link_preview_options': {
                 '@type': 'linkPreviewOptions',
                 'is_disabled': disable_web_page_preview,
             },
@@ -407,7 +406,7 @@ class API(BaseAPI):
         if reply_to_message_id:
             reply_to = {
                 '@type': 'inputMessageReplyToMessage',
-                'chat_id': 0,  # pass 0 if the message to be replied is in the same chat
+                'checklist_task_id': 0,  # pass 0 to reply to the whole message
                 'message_id': reply_to_message_id,
                 'quote': None,
             }
@@ -415,7 +414,7 @@ class API(BaseAPI):
         return self.send_data(
             'sendMessage',
             chat_id=chat_id,
-            message_thread_id=message_thread_id,
+            topic_id=None,
             reply_to=reply_to,
             input_message_content=input_message_content,
             options=_get_send_message_options(
@@ -433,7 +432,7 @@ class API(BaseAPI):
             parse_mode={'@type': parse_mode.value, 'version': 2},
         )
 
-    def resend_messages(self, chat_id: int, message_ids: list):
+    def resend_messages(self, chat_id: int, message_ids: list[int]):
         """Запрос на переотправку неотправленного сообщения"""
         return self.send_data(
             'resendMessages',
@@ -442,33 +441,36 @@ class API(BaseAPI):
             quote=None,
         )
 
-    def delete_messages(self, chat_id, message_ids: list):
+    def delete_messages(self, chat_id, message_ids: list[int], revoke: bool = True):
         """Запрос на удаление сообщений"""
         return self.send_data(
             'deleteMessages',
             chat_id=chat_id,
             message_ids=message_ids,
-            revoke=True,
+            revoke=revoke,
         )
 
     def forward_messages(
         self,
         chat_id: int,
         from_chat_id: int,
-        message_ids: list,
+        message_ids: list[int],
         disable_notification: bool = None,
         from_background: bool = None,
         send_date: int = None,
-        message_thread_id: int = 0,
+        message_thread_id: Optional[int] = None,
         send_copy: bool = False,
         remove_caption: bool = False,
         only_preview: bool = False,  # deprecated  # noqa
     ):
-        """Запрос на пересылку сообщения из одного чата в другой"""
+        """Запрос на пересылку сообщения из одного чата в другой
+
+        message_thread_id - не используется, оставлено для обратной совместимости
+        """
         return self.send_data(
             'forwardMessages',
             chat_id=chat_id,
-            message_thread_id=message_thread_id,
+            topic_id=None,
             from_chat_id=from_chat_id,
             message_ids=message_ids,
             options=_get_send_message_options(

@@ -1,3 +1,5 @@
 .idea
 venv
 __pycache__
+tdlib_image/build
+tdlib_image/.env

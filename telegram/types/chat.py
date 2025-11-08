@@ -13,6 +13,7 @@ class ChatPhotoInfo(RawDataclass):
     big: File = None
     minithumbnail: dict = None
     has_animation: bool = None
+    is_personal: bool = None
 
 
 @dataclass
@@ -26,16 +27,11 @@ class ChatPermissions(RawDataclass):
     can_send_voice_notes: bool = None
     can_send_polls: bool = None
     can_send_other_messages: bool = None
-    can_add_web_page_previews: bool = None
+    can_add_link_previews: bool = None
     can_change_info: bool = None
     can_invite_users: bool = None
     can_pin_messages: bool = None
     can_create_topics: bool = None
-
-    # deprecated
-    can_manage_topics: bool = None
-    can_send_messages: bool = None
-    can_send_media_messages: bool = None
 
 
 class ChatType(str, Enum):
@@ -62,6 +58,7 @@ class Chat(RawDataclass):
     photo: ChatPhotoInfo = None
     accent_color_id: int = None
     background_custom_emoji_id: int = None
+    # upgraded_gift_colors:upgradedGiftColors
     profile_accent_color_id: int = None
     profile_background_custom_emoji_id: int = None
     permissions: ChatPermissions = None
@@ -89,8 +86,9 @@ class Chat(RawDataclass):
     message_auto_delete_time: int = None
     # emoji_status: emojiStatus
     # background:chatBackground
-    theme_name: str = None
+    # theme:ChatTheme
     # action_bar: ChatActionBar = None
+    # business_bot_manage_bar:businessBotManageBar
     # video_chat: VideoChat = None
     # pending_join_requests: ChatJoinRequestInfo = None
     reply_markup_message_id: int = None

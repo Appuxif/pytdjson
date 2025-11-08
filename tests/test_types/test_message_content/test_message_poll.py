@@ -9,11 +9,11 @@ content_message_poll = {
     "poll": {
         "@type": "poll",
         "id": "5258351215229534512",
-        "question": "Что выведет этот код?",
+        "question": {"text": "Что выведет этот код?", "entities": []},
         "options": [
             {
                 "@type": "pollOption",
-                "text": "True",
+                "text": {"text": "True", "entities": []},
                 "voter_count": 0,
                 "vote_percentage": 0,
                 "is_chosen": False,
@@ -21,7 +21,7 @@ content_message_poll = {
             },
             {
                 "@type": "pollOption",
-                "text": "False",
+                "text": {"text": "False", "entities": []},
                 "voter_count": 0,
                 "vote_percentage": 0,
                 "is_chosen": False,
@@ -29,7 +29,7 @@ content_message_poll = {
             },
             {
                 "@type": "pollOption",
-                "text": "Ошибку",
+                "text": {"text": "Ошибку", "entities": []},
                 "voter_count": 0,
                 "vote_percentage": 0,
                 "is_chosen": False,
@@ -37,7 +37,7 @@ content_message_poll = {
             },
             {
                 "@type": "pollOption",
-                "text": "Узнать ответ",
+                "text": {"text": "Узнать ответ", "entities": []},
                 "voter_count": 0,
                 "vote_percentage": 0,
                 "is_chosen": False,

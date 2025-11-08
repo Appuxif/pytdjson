@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  build-tdlib:
+    image: "${DOCKER_USERNAME}/ubuntu24tdlib:1.8.56"
+    volumes:
+      - ./build/:/home/build/
+      - ./script/:/home/script/
+    working_dir: /home/build
+    entrypoint: "bash /home/script/build_tdlib.sh"

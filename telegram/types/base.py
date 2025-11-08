@@ -1,7 +1,7 @@
 import json
 from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
-from typing import Callable, Dict, Type
+from typing import Any, Callable, Dict, Optional, Type
 
 
 def default_getter(value):
@@ -87,7 +87,7 @@ class ObjectBuilder:
         )
 
 
-def build_variables(cls: Type[RawDataclass], base=None):
+def build_variables(cls: Type[RawDataclass], base: Optional[str] = None):
     """Пробегается по всему дереву вложенных объектов и
     возвращает список из возможных переменных для доступа к значению
     через f-strings
@@ -105,7 +105,14 @@ def build_variables(cls: Type[RawDataclass], base=None):
         _variables = [variable]
 
         if isinstance(cls_field.type, ObjectBuilder):
-            _variables = build_variables_for_object_builder(cls_field, variable)
+            _variables = build_variables_for_object_builder(
+                cls_field.type.mapping, variable
+            )
+
+        elif isinstance(cls_field.metadata.get('getter'), ObjectBuilder):
+            _variables = build_variables_for_object_builder(
+                cls_field.metadata['getter'].mapping, variable
+            )
 
         elif isinstance(cls_field.type, type) and issubclass(
             cls_field.type, RawDataclass
@@ -117,12 +124,14 @@ def build_variables(cls: Type[RawDataclass], base=None):
     return variables
 
 
-def build_variables_for_object_builder(cls_field, base):
+def build_variables_for_object_builder(
+    mapping: dict[str, Type[RawDataclass]], base: Optional[str] = None
+):
     """Пробегается по ObjectBuilder.mapping и объединяет всевозможные поля"""
     return list(
         {
             var
-            for child_cls in cls_field.type.mapping.values()
+            for child_cls in mapping.values()
             for var in build_variables(child_cls, base)
         }
     )

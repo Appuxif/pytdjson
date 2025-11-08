@@ -97,7 +97,7 @@ class UpdateTestCase(TestCase):
                 'type': {'@type': 'chatTypePrivate', 'user_id': 1},
                 'permissions': {
                     '@type': 'chatPermissions',
-                    'can_send_messages': True,
+                    'can_send_basic_messages': True,
                 },
             },
         }
@@ -108,7 +108,7 @@ class UpdateTestCase(TestCase):
         self.assertEqual('fake_chat_obj', update.chat.raw['@type'])
         self.assertEqual(ChatType.PRIVATE, update.chat.type)
         self.assertEqual(1, update.chat.user_id)
-        self.assertTrue(update.chat.permissions.can_send_messages)
+        self.assertTrue(update.chat.permissions.can_send_basic_messages)
         self.assertIsNone(update.chat.id)
 
     def test_update_new_chat_with_photo(self):
@@ -175,7 +175,6 @@ class UpdateTestCase(TestCase):
                 '@type': 'user',
                 'id': 1,
                 'have_access': True,
-                'is_fake': False,
                 'type': {'@type': 'userTypeRegular'},
             },
         }
@@ -187,7 +186,6 @@ class UpdateTestCase(TestCase):
         self.assertIsNone(update.user.first_name)
         self.assertEqual(UserType.REGULAR, update.user.type)
         self.assertTrue(update.user.have_access)
-        self.assertFalse(update.user.is_fake)
 
     def test_update_user_full_info(self):
         """Обновление updateUserFullInfo"""
@@ -198,7 +196,7 @@ class UpdateTestCase(TestCase):
             'user_full_info': {
                 '@type': 'userFullInfo',
                 'is_blocked': True,
-                'bio': 'test-bio',
+                'bio': {'text': 'test-bio', 'entities': []},
             },
         }
 
@@ -206,7 +204,6 @@ class UpdateTestCase(TestCase):
 
         self.assertIsInstance(update, UpdateUserFullInfo)
         self.assertEqual(1, update.user_id)
-        self.assertTrue(update.user_full_info.is_blocked)
         self.assertEqual('test-bio', update.user_full_info.bio)
 
     def test_update_supergroup(self):

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from telegram.types.base import RawDataclass
+from telegram.types.text import FormattedText
 
 
 @dataclass
@@ -50,3 +51,12 @@ class Usernames(RawDataclass):
             active_usernames = raw['usernames'].get('active_usernames')
             if isinstance(active_usernames, list) and active_usernames:
                 return raw['usernames']['active_usernames'][0]
+
+
+@dataclass
+class ProductInfo(RawDataclass):
+    """productInfo"""
+
+    title: str = None
+    description: FormattedText = None
+    # photo: Photo = None

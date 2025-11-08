@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
 from telegram.types.base import RawDataclass
@@ -12,7 +12,9 @@ class File(RawDataclass):
     size: int = None
     expected_size: int = None
     local_path: str = None
+    # local:localFile
     remote_id: int = None
+    # remote:remoteFile
     remote_unique_id: int = None
 
     def _assign_raw(self):
@@ -63,10 +65,10 @@ class PhotoSize(RawDataclass):
     photo: File = None
     width: int = None
     height: int = None
-    progressive_sizes: List[int] = None
-
-    def _assign_raw(self):
-        self.progressive_sizes = [int(size) for size in self.raw['progressive_sizes']]
+    progressive_sizes: List[int] = field(
+        default=None,
+        metadata={'getter': lambda items: [int(item) for item in items]},
+    )
 
 
 @dataclass
@@ -74,10 +76,10 @@ class PhotoFile(RawDataclass):
     """Фото"""
 
     has_stickers: bool = None
-    sizes: List[PhotoSize] = None
-
-    def _assign_raw(self):
-        self.sizes = [PhotoSize(size) for size in self.raw['sizes']]
+    sizes: List[PhotoSize] = field(
+        default=None,
+        metadata={'getter': lambda items: [PhotoSize(item) for item in items]},
+    )
 
 
 @dataclass
@@ -92,6 +94,28 @@ class VideoFile(RawDataclass):
     has_stickers: bool = None
     supports_streaming: bool = None
     video: File = None
+
+
+@dataclass
+class AlternativeVideoFile(RawDataclass):
+    """Альтернативный видео файл"""
+
+    id: int = None
+    width: int = None
+    height: int = None
+    codec: str = None
+    hls_file: File = None
+    video: File = None
+
+
+@dataclass
+class VideoStoryboardFile(RawDataclass):
+    """Describes a storyboard for a video"""
+
+    storyboard_file: File = None
+    width: int = None
+    height: int = None
+    map_file: File = None
 
 
 @dataclass

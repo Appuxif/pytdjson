@@ -12,7 +12,9 @@ class File(RawDataclass):
     size: int = None
     expected_size: int = None
     local_path: str = None
+    # local:localFile
     remote_id: int = None
+    # remote:remoteFile
     remote_unique_id: int = None
 
     def _assign_raw(self):
@@ -93,6 +95,25 @@ class VideoFile(RawDataclass):
     supports_streaming: bool = None
     video: File = None
 
+
+@dataclass
+class AlternativeVideoFile(RawDataclass):
+    """Альтернативный видео файл"""
+    id: int = None
+    width: int = None
+    height: int = None
+    codec: str = None
+    hls_file: File = None
+    video: File = None
+
+
+@dataclass
+class VideoStoryboardFile(RawDataclass):
+    """Describes a storyboard for a video"""
+    storyboard_file: File = None
+    width: int = None
+    height: int = None
+    map_file: File = None
 
 @dataclass
 class VideoNote(RawDataclass):

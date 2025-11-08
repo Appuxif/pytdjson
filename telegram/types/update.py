@@ -16,6 +16,7 @@ class AuthorizationState(str, Enum):
 
     WAIT_TDLIB_PARAMETERS = 'authorizationStateWaitTdlibParameters'
     WAIT_PHONE_NUMBER = 'authorizationStateWaitPhoneNumber'
+    WAIT_PREMIUM_PURCHASE = 'authorizationStateWaitPremiumPurchase'
     WAIT_EMAIL_ADDRESS = 'authorizationStateWaitEmailAddress'
     WAIT_EMAIL_CODE = 'authorizationStateWaitEmailCode'
     WAIT_CODE = 'authorizationStateWaitCode'

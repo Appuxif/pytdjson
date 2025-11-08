@@ -3,7 +3,7 @@ import logging
 import signal
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from types import FrameType
 from typing import Any, Callable, Coroutine, DefaultDict, Dict, List, Optional
 from uuid import uuid4
@@ -102,7 +102,6 @@ class AsyncTelegram:
 
         self.handler_workers_queue = asyncio.Queue(
             self.settings.default_workers_queue_size,
-            loop=self._loop,
         )
 
         # Должен быть только один воркер
@@ -200,7 +199,6 @@ class AsyncTelegram:
     async def _wait_futures(self, fs, timeout=None):
         done, pending = await asyncio.wait(
             fs,
-            loop=self._loop,
             timeout=timeout,
             return_when=asyncio.FIRST_COMPLETED,
         )
@@ -240,7 +238,8 @@ class AsyncTelegram:
                 last_try = self._loop.time()
 
             update = await self._loop.run_in_executor(
-                self._tdjson_executor, self._tdjson.receive
+                self._tdjson_executor,
+                self._tdjson.receive,
             )
 
             if update:
@@ -258,10 +257,10 @@ class AsyncTelegram:
 
         async def _inner(_handler, _update):
             try:
-                if asyncio.iscoroutinefunction(handler):
-                    await handler(update)
+                if asyncio.iscoroutinefunction(_handler):
+                    await _handler(_update)
                 else:
-                    await self._loop.run_in_executor(self._executor, handler, update)
+                    await self._loop.run_in_executor(self._executor, _handler, _update)
             finally:
                 self.handler_workers_queue.task_done()
 
@@ -283,8 +282,8 @@ class AsyncTelegram:
                 continue
 
             try:
-                update = self._prepare_update(update)
-                task = self.wrap_task(_inner(handler, update))
+                prepared_update = self._prepare_update(update)
+                task = self.wrap_task(_inner(handler, prepared_update))
                 tasks.append(task)
             except:
                 self.handler_workers_queue.task_done()
@@ -333,7 +332,7 @@ class AsyncTelegram:
         self,
         request_id: Optional[str] = None,
         timeout: int = 30,
-    ) -> Dict[Any, Any]:
+    ) -> Optional[Dict[Any, Any]]:
         loop = asyncio.get_running_loop()
         timer = loop.time()
         while self.is_enabled:
@@ -345,6 +344,7 @@ class AsyncTelegram:
 
             if loop.time() - timer > timeout:
                 raise TimeoutError(f'result not set {request_id}')
+        return None
 
     async def _run_handlers(self, update: Dict[Any, Any]) -> None:
         update_type: str = update.get('@type', 'unknown')

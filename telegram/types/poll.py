@@ -12,10 +12,15 @@ class PollOption(RawDataclass):
     """Опция опроса"""
 
     text: str = None
+    text_formatted: FormattedText = None
     voter_count: int = None
     vote_percentage: int = None
     is_chosen: bool = None
     is_being_chosen: bool = None
+
+    def _assign_raw(self):
+        self.text_formatted = FormattedText(self.raw['text'])
+        self.text = self.text_formatted.text
 
 
 class PollType(str, Enum):
@@ -31,6 +36,7 @@ class Poll(RawDataclass):
 
     id: int = None
     question: str = None
+    question_formatted: FormattedText = None
     options: List[PollOption] = field(
         default=None,
         metadata={'getter': lambda options: [PollOption(opt) for opt in options]},
@@ -61,6 +67,8 @@ class Poll(RawDataclass):
     allow_multiple_answers: bool = None
 
     def _assign_raw(self):
+        self.question_formatted = FormattedText(self.raw['question'])
+        self.question = self.question_formatted.text
         if 'correct_option_id' in self.raw['type']:
             self.correct_option_id = self.raw['type']['correct_option_id']
             self.explanation = FormattedText(self.raw['type']['explanation'])

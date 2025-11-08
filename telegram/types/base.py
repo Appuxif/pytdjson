@@ -1,7 +1,7 @@
 import json
 from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
-from typing import Callable, Dict, Type
+from typing import Callable, Dict, Type, Any
 
 
 def default_getter(value):

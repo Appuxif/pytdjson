@@ -19,6 +19,7 @@ class ReactionType(str, Enum):
 
     EMOJI = 'reactionTypeEmoji'
     CUSTOM = 'reactionTypeCustomEmoji'
+    PAID = 'reactionTypePaid'
 
     def build(self, value: Union[int, str]):
         data = {'@type': self.value}
@@ -39,6 +40,7 @@ class MessageOrigin(RawDataclass):
         USER = 'messageOriginUser'
         HIDDEN = 'messageOriginHiddenUser'
         CHAT = 'messageOriginChat'
+        CHANNEL = 'messageOriginChannel'
 
     message_origin_type: Type = Type.USER
 
@@ -52,18 +54,29 @@ class MessageOrigin(RawDataclass):
     sender_chat_id: int = None
     author_signature: str = None
 
+    # messageOriginChannel
+    channel_chat_id: int = None
+    channel_message_id: int = None
+    # author_signature: str = None
+
     def _assign_raw(self):
         if self.raw.get('sender_user_id'):
             self.message_origin_type = self.Type.USER
             self.sender_user_id = self.raw['sender_user_id']
 
-        if self.raw.get('sender_name'):
+        elif self.raw.get('sender_name'):
             self.message_origin_type = self.Type.HIDDEN
             self.sender_name = self.raw['sender_name']
 
-        if self.raw.get('sender_chat_id'):
+        elif self.raw.get('sender_chat_id'):
             self.message_origin_type = self.Type.CHAT
             self.sender_chat_id = self.raw['sender_chat_id']
+            self.author_signature = self.raw.get('author_signature')
+
+        else:
+            self.message_origin_type = self.Type.CHANNEL
+            self.channel_chat_id = self.raw['chat_id']
+            self.channel_message_id = self.raw['message_id']
             self.author_signature = self.raw.get('author_signature')
 
 
@@ -109,22 +122,12 @@ class Message(RawDataclass):
     # scheduling_state:MessageSchedulingState
     is_outgoing: bool = None
     is_pinned: bool = None
-    can_be_edited: bool = None
-    can_be_forwarded: bool = None
-    can_be_replied_in_another_chat: bool = None
+    # is_from_offline:Bool
     can_be_saved: bool = None
-    can_be_deleted_only_for_self: bool = None
-    can_be_deleted_for_all_users: bool = None
-    can_get_added_reactions: bool = None
-    can_get_statistics: bool = None
-    can_get_message_thread: bool = None
-    can_get_read_date: bool = None
-    can_get_viewers: bool = None
-    can_get_media_timestamp_links: bool = None
-    can_report_reactions: bool = None
     has_timestamped_media: bool = None
     is_channel_post: bool = None
-    is_topic_message: bool = None
+    # is_paid_star_suggested_post:Bool
+    # is_paid_ton_suggested_post:Bool
     contains_unread_mention: bool = None
     date: int = None
     edit_date: int = None
@@ -132,24 +135,23 @@ class Message(RawDataclass):
     # import_info: messageImportInfo
     # interaction_info: messageInteractionInfo
     # unread_reactions: list[UnreadReaction]
+    # fact_check:factCheck
+    # suggested_post_info:suggestedPostInfo
     # reply_to: MessageReplyTo  # <--
-    message_thread_id: int = None
-    saved_messages_topic_id: int = None
+    # topic_id:MessageTopic
     # self_destruct_type:MessageSelfDestructType
     self_destruct_in: float = None
     auto_delete_in: float = None
     via_bot_user_id: int = None
+    # sender_business_bot_user_id:int53
     sender_boost_count: int = None
+    # paid_message_star_count:int53
     author_signature: str = None
     media_album_id: int = None
-    restriction_reason: str = None
+    # effect_id:int64
+    # restriction_info:restrictionInfo
     content: MessageContent = None
     reply_markup: dict = None
-
-    # for back compatibility
-    reply_in_chat_id: int = None
-    reply_to_message_id: int = None
-    self_destruct_time: int = None
 
     def _assign_raw(self):
         if self.raw.get('sender_id') and not self.raw.get('sender'):

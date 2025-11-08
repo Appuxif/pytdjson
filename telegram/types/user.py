@@ -4,6 +4,7 @@ from enum import Enum
 from telegram.types.base import RawDataclass
 from telegram.types.common import Usernames
 from telegram.types.files import File
+from telegram.types.text import FormattedText
 
 
 class UserStatus(str, Enum):
@@ -47,15 +48,25 @@ class User(RawDataclass):
     phone_number: str = None
     status: UserStatus = None
     profile_photo: ProfilePhoto = None
+    # accent_color_id
+    # background_custom_emoji_id
+    # upgraded_gift_colors
+    # profile_accent_color_id
+    # profile_background_custom_emoji_id
     # emoji_status: emojiStatus
     is_contact: bool = None
     is_mutual_contact: bool = None
-    is_verified: bool = None
+    is_close_friend: bool = None
+    # verification_status
+    # is_verified: bool = None
     is_premium: bool = None
     is_support: bool = None
-    restriction_reason: str = None
-    is_scam: bool = None
-    is_fake: bool = None
+    # restriction_info
+    # restriction_reason: str = None
+    # has_active_stories
+    # has_unread_active_stories
+    # restricts_new_chats
+    # paid_message_star_count
     have_access: bool = None
     type: UserType = None
     language_code: str = None
@@ -80,10 +91,38 @@ class User(RawDataclass):
 class UserFullInfo(RawDataclass):
     """Дополнительная информация о пользователе"""
 
-    bio: str = None
-    share_text: str = None
-    description: str = None
+    # personal_photo
+    # photo
+    # public_photo
     # block_list:BlockList
+    # can_be_called
+    # supports_video_calls
+    # has_private_calls
+    # has_private_forwards
+    # has_restricted_voice_and_video_note_messages
+    # has_posted_to_profile_stories
+    # has_sponsored_messages_enabled
+    # need_phone_number_privacy_exception
+    # set_chat_background
+    bio: str = None
+    bio_formatted: FormattedText = None
+    # birthdate
+    # personal_chat_id
+    # gift_count
+    # group_in_common_count
+    # incoming_paid_message_star_count
+    # outgoing_paid_message_star_count
+    # gift_settings
+    # bot_verification
+    # main_profile_tab
+    # first_profile_audio
+    # rating
+    # pending_rating
+    # pending_rating_date
+    # note
+    # business_info
+    # bot_info
 
-    # deprecated
-    is_blocked: bool = None
+    def _assign_raw(self):
+        self.bio_formatted = FormattedText(self.raw['bio'])
+        self.bio = self.bio_formatted.text

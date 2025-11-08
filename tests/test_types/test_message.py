@@ -49,7 +49,7 @@ message_base = {
 message_with_forward_info = {
     **message_base,
     'forward_info': {
-        'origin': {},
+        'origin': {'sender_user_id': 123},
         'date': 1636692739,
         'from_chat_id': 1,
         'from_message_id': 2,

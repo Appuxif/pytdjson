@@ -24,11 +24,12 @@ class TextEntityType(str, Enum):
     CODE = 'textEntityTypeCode'
     PRE = 'textEntityTypePre'
     PRE_CODE = 'textEntityTypePreCode'
+    BLOCK_QUOTE = 'textEntityTypeBlockQuote'
+    EXPANDABLE_BLOCK_QUOTE = 'textEntityTypeExpandableBlockQuote'
     TEXT_URL = 'textEntityTypeTextUrl'
     MENTION_NAME = 'textEntityTypeMentionName'
     CUSTOM_EMOJI = 'textEntityTypeCustomEmoji'
     MEDIA_TIMESTAMP = 'textEntityTypeMediaTimestamp'
-    BLOCK_QUOTE = 'textEntityTypeBlockQuote'
 
 
 @dataclass
@@ -40,10 +41,15 @@ class TextEntity(RawDataclass):
     type: TextEntityType = None
 
     # type-specific
+    # MENTION_NAME
     user_id: int = None
+    # CUSTOM_EMOJI
     custom_emoji_id: int = None
+    # MEDIA_TIMESTAMP
     media_timestamp: int = None
+    # PRE_CODE
     language: str = None
+    # TEXT_URL
     url: str = None
 
     def _assign_raw(self):

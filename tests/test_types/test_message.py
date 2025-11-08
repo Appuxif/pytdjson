@@ -49,7 +49,7 @@ message_base = {
 message_with_forward_info = {
     **message_base,
     'forward_info': {
-        'origin': {},
+        'origin': {'sender_user_id': 123},
         'date': 1636692739,
         'from_chat_id': 1,
         'from_message_id': 2,
@@ -58,6 +58,18 @@ message_with_forward_info = {
 message_sender_chat = {
     **message_base,
     'sender': {'@type': 'messageSenderChat', 'chat_id': 1394101816},
+}
+message_with_reply_to = {
+    **message_base,
+    'reply_to': {
+        '@type': 'messageReplyToMessage',
+        'chat_id': 1,
+        'message_id': 2,
+        'checklist_task_id': 0,
+        'origin': {'sender_user_id': 123},
+        'origin_send_date': 111,
+        'content': {'@type': 'fake-message-content'},
+    },
 }
 
 
@@ -141,3 +153,14 @@ class MessageTestCase(TestCase):
 
         self.assertEqual(MessageSenderType.CHAT, message.sender.type)
         self.assertEqual(1394101816, message.sender.id)
+
+    def test_message_with_reply_to(self):
+        message_dict = deepcopy(message_with_reply_to)
+
+        message = Message(message_dict)
+
+        self.assertEqual('MessageReplyToMessage', message.reply_to.class_type)
+        self.assertEqual(1, message.reply_to.chat_id)
+        self.assertEqual(2, message.reply_to.message_id)
+        self.assertEqual(0, message.reply_to.checklist_task_id)
+        self.assertEqual(123, message.reply_to.origin.sender_user_id)

@@ -1,11 +1,11 @@
-# Ubuntu20 tdlib
+# Ubuntu24 tdlib
 
 
 ## Build Image
 > source .env
 > sudo docker login -u $DOCKER_USERNAME -p $DOCKER_API_KEY
-> sudo docker build . -t $DOCKER_USERNAME/ubuntu24tdlib:latest -t $DOCKER_USERNAME/ubuntu24tdlib:1.8.56
-> sudo docker push $DOCKER_USERNAME/ubuntu24tdlib:latest $DOCKER_USERNAME/ubuntu24tdlib:1.8.56
+> sudo docker build . -t $DOCKER_USERNAME/ubuntu24tdlib:latest -t $DOCKER_USERNAME/ubuntu24tdlib:1.8.67
+> sudo docker push $DOCKER_USERNAME/ubuntu24tdlib:latest $DOCKER_USERNAME/ubuntu24tdlib:1.8.67
 
 ## Build tdlib
 > sudo docker compose up --build --force-recreate build-tdlib

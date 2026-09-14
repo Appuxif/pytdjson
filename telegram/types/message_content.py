@@ -164,6 +164,7 @@ class MessageLocation(MessageContentBase):
         """Flatten TDLib 1.8.67 live locations into the legacy shape."""
         if self.raw.get('@type') != 'messageLiveLocation':
             return
+
         live_location = self.raw.get('location') or {}
         location = live_location.get('location')
         if location:
@@ -354,6 +355,8 @@ class MessageContentBuilder(ObjectBuilder):
             key = cls.__name__
             key = key[0].lower() + key[1:]
             self.mapping[key] = cls
+        # TDLib split live locations from messageLocation in 1.8.67.  Keep the
+        # existing wrapper class and its flattened fields for callers.
         self.mapping['messageLiveLocation'] = MessageLocation
 
 

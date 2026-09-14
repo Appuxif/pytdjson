@@ -407,6 +407,7 @@ class API(BaseAPI):
             reply_to = {
                 '@type': 'inputMessageReplyToMessage',
                 'checklist_task_id': 0,  # pass 0 to reply to the whole message
+                'poll_option_id': '',  # pass an empty value to reply to the whole poll
                 'message_id': reply_to_message_id,
                 'quote': None,
             }
@@ -695,6 +696,7 @@ def _get_send_message_options(
         options['scheduling_state'] = {
             '@type': 'messageSchedulingStateSendAtDate',
             'send_date': send_date,
+            'repeat_period': 0,
         }
 
     if options:

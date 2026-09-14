@@ -5,3 +5,4 @@ __pycache__
 tdlib_image/build
 tdlib_image/.env
 .env
+!/tdlib_image/build/

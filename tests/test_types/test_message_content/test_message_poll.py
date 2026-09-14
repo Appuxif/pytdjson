@@ -102,7 +102,11 @@ class MessagePollTestCase(TestCase):
         content_dict['poll']['type'] = {
             '@type': 'pollTypeQuiz',
             'correct_option_ids': [2],
-            'explanation': {'@type': 'formattedText', 'text': 'Because', 'entities': []},
+            'explanation': {
+                '@type': 'formattedText',
+                'text': 'Because',
+                'entities': [],
+            },
             'explanation_media': None,
         }
 

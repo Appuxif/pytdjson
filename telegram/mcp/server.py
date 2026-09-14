@@ -1,0 +1,161 @@
+"""Read-only MCP server exposing the supported pytdjson API."""
+import asyncio
+from contextlib import asynccontextmanager
+from typing import Annotated
+
+from mcp.server import MCPServer
+from mcp.types import ToolAnnotations
+from pydantic import Field
+
+from telegram.client import Settings
+from telegram.mcp import projection
+from telegram.mcp.runtime import TelegramRuntime
+
+READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True)
+LIMIT = Annotated[int, Field(ge=1, le=100)]
+
+
+def create_server(
+    settings: Settings, runtime: TelegramRuntime | None = None
+) -> MCPServer:
+    """Create the stdio server. TDLib starts only when its lifespan begins."""
+    runtime = runtime or TelegramRuntime(settings)
+
+    @asynccontextmanager
+    async def lifespan(_: MCPServer):
+        await runtime.start()
+        try:
+            yield runtime
+        finally:
+            await runtime.stop()
+
+    mcp = MCPServer(
+        'pytdjson-mcp',
+        title='PyTDJson',
+        description='Read-only Telegram data through a local TDLib session.',
+        lifespan=lifespan,
+    )
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_me() -> dict:
+        """Get the authenticated Telegram account."""
+        return projection.user(await runtime.call('get_me'))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_user(user_id: int) -> dict:
+        """Get a Telegram user by numeric ID."""
+        return projection.user(await runtime.call('get_user', user_id))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_chat(chat_id: int) -> dict:
+        """Get a cached Telegram chat by numeric ID."""
+        return projection.chat(await runtime.call('get_chat', chat_id))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_chats(limit: LIMIT = 100, chat_list: str = 'chatListMain') -> dict:
+        """List compact cached chat objects from a Telegram chat list."""
+        result = await runtime.call('get_chats', limit=limit, chat_list=chat_list)
+        chats = await asyncio.gather(
+            *(
+                runtime.call('get_chat', chat_id)
+                for chat_id in result.get('chat_ids', [])
+            )
+        )
+        return {
+            'total_count': result.get('total_count'),
+            'chats': [
+                projection.chat(chat, include_last_message=False) for chat in chats
+            ],
+        }
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def load_chats(limit: LIMIT = 10, chat_list: str = 'chatListMain') -> dict:
+        """Ask TDLib to load chats into its local cache."""
+        await runtime.call('load_chats', limit=limit, chat_list=chat_list)
+        return {'loaded': True}
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_chat_history(
+        chat_id: int,
+        limit: LIMIT = 100,
+        from_message_id: int = 0,
+        offset: int = 0,
+        only_local: bool = False,
+    ) -> dict:
+        """Get a compact page of messages from one chat.
+
+        TDLib can return fewer than ``limit`` messages while it loads a history
+        gap. Start with ``from_message_id=0``. For the next page, set
+        ``from_message_id`` to the oldest message ID returned, with
+        ``offset=0`` and ``only_local=false``. Repeat the same request when a
+        short page appears to be loading a gap.
+        """
+        result = await runtime.call(
+            'get_chat_history',
+            chat_id,
+            limit=limit,
+            from_message_id=from_message_id,
+            offset=offset,
+            only_local=only_local,
+        )
+        return projection.history(result)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_message(chat_id: int, message_id: int) -> dict:
+        """Get one message by chat and message ID."""
+        return projection.message(
+            await runtime.call('get_message', message_id, chat_id)
+        )
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_message_link(
+        chat_id: int, message_id: int, in_message_thread: bool = False
+    ) -> dict:
+        """Get a shareable link for a message."""
+        result = await runtime.call(
+            'get_message_link', chat_id, message_id, in_message_thread
+        )
+        return {'link': result.get('link'), 'is_public': result.get('is_public')}
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_supergroup(supergroup_id: int) -> dict:
+        """Get a supergroup or channel by numeric ID."""
+        return projection.group(await runtime.call('get_supergroup', supergroup_id))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_supergroup_full_info(supergroup_id: int) -> dict:
+        """Get compact extended information for a supergroup or channel."""
+        return projection.group(
+            await runtime.call('get_supergroup_full_info', supergroup_id)
+        )
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_basic_group(basic_group_id: int) -> dict:
+        """Get a basic group by numeric ID."""
+        return projection.group(await runtime.call('get_basic_group', basic_group_id))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_basic_group_full_info(basic_group_id: int) -> dict:
+        """Get compact extended information for a basic group."""
+        return projection.group(
+            await runtime.call('get_basic_group_full_info', basic_group_id)
+        )
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def search_public_chat(username: str) -> dict:
+        """Find a public chat by username, without the leading @."""
+        return projection.chat(await runtime.call('search_public_chat', username))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_storage_statistics(chat_limit: LIMIT = 10) -> dict:
+        """Get compact local TDLib storage statistics."""
+        return projection.statistics(
+            await runtime.call('get_storage_statistics', chat_limit)
+        )
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_database_statistics() -> dict:
+        """Get compact local TDLib database statistics."""
+        return projection.statistics(await runtime.call('get_database_statistics'))
+
+    return mcp

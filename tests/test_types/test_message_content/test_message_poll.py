@@ -80,3 +80,18 @@ class MessagePollTestCase(TestCase):
         self.assertListEqual([], content.poll.recent_voter_user_ids)
         self.assertEqual(True, content.poll.is_anonymous)
         self.assertEqual(False, content.poll.is_closed)
+
+    def test_tdlib_1_8_67_preserves_all_quiz_answers(self):
+        content_dict = deepcopy(content_message_poll)
+        content_dict['poll']['type'] = {
+            '@type': 'pollTypeQuiz',
+            'correct_option_ids': [1, 3],
+            'explanation': {'@type': 'formattedText', 'text': 'Answer', 'entities': []},
+        }
+        content_dict['poll']['allows_multiple_answers'] = True
+
+        content = MessageContent(content_dict)
+
+        self.assertEqual([1, 3], content.poll.correct_option_ids)
+        self.assertEqual(1, content.poll.correct_option_id)
+        self.assertTrue(content.poll.allow_multiple_answers)

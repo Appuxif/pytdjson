@@ -1,12 +1,52 @@
+[project]
+name = "pytdjson"
+version = "0.8.0"
+description = "A Python asyncio wrapper for TDLib"
+readme = "README.md"
+requires-python = ">=3.11,<4.0"
+authors = [{ name = "Appuxif", email = "app@mail.com" }]
+license = "MIT"
+license-files = ["LICENSE.txt"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.optional-dependencies]
+mcp = ["mcp>=2,<3", "python-dotenv>=1,<2"]
+
+[project.scripts]
+pytdjson-mcp = "telegram.mcp.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Appuxif/pytdjson"
+Issues = "https://github.com/Appuxif/pytdjson/issues"
+
+[build-system]
+requires = ["poetry-core>=2,<3"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [{ include = "telegram" }]
+include = ["telegram/lib/linux/*"]
+
+[tool.poetry.group.dev.dependencies]
+black = "==22.6.0"
+isort = "==5.10.1"
+pylint = "==2.14.4"
+mcp = ">=2,<3"
+
 [tool.black]
 skip-string-normalization = true
 exclude = '(migrations)'
 
 [tool.isort]
-line_length = '88'
-multi_line_output = '3'
-include_trailing_comma = 'true'
-combine_as_imports = '1'
-known_firstparty = ['project']
-known_third_party = ["dateutil", "markdown2", "pylint", "requests", "setuptools"]
-sections = 'FUTURE,STDLIB,THIRDPARTY,FIRSTPARTY,LOCALFOLDER'
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+combine_as_imports = true
+known_firstparty = ["telegram"]
+known_third_party = ["mcp", "pylint"]
+sections = "FUTURE,STDLIB,THIRDPARTY,FIRSTPARTY,LOCALFOLDER"

@@ -23,6 +23,49 @@ Launch tests
 
 > python -m unittest discover -s tests
 
+## MCP server
+
+`pytdjson-mcp` is an optional, read-only MCP server for local AI agents. It
+uses the same TDLib session database as the Python wrapper. It supports stdio
+and Streamable HTTP transports, and exposes compact summaries for chats,
+messages, users, groups, links, and local statistics; it doesn't send messages
+or mark them as read.
+
+Install it from a release tag with the optional extra:
+
+> pip install "pytdjson[mcp] @ https://github.com/Appuxif/pytdjson/archive/refs/tags/0.8.0.zip"
+
+Copy `.env.example` to a private local file, set its `PYTDJSON_*` values, and
+keep it outside version control. The database encryption key, API hash, and
+bot token are secrets. For a phone account, authorize once in a terminal:
+
+> pytdjson-mcp login --env-file /secure/path/pytdjson.env
+
+The command prompts for the Telegram code and two-step-verification password
+only when TDLib asks for them. They are never saved to the dotenv file. Later,
+run the MCP server with the same files directory:
+
+> pytdjson-mcp serve --env-file /secure/path/pytdjson.env
+
+Configure an MCP host to launch that command over stdio. The server requires
+an existing authorized session; if it expires, run `login` again in a terminal.
+
+For one shared local TDLib session used by multiple MCP clients, run the
+Streamable HTTP transport in a persistent terminal or service:
+
+> pytdjson-mcp serve --transport streamable-http --host 127.0.0.1 --port 8765 --env-file /secure/path/pytdjson.env
+
+The endpoint is `http://127.0.0.1:8765/mcp`. Keep the default loopback host
+unless you place the server behind authenticated network access. A Codex client
+can connect to it with:
+
+```toml
+[mcp_servers.telegram]
+url = "http://127.0.0.1:8765/mcp"
+required = true
+startup_timeout_sec = 30
+```
+
 ## Example
 
 * Take a look at https://core.telegram.org/tdlib

@@ -199,7 +199,7 @@ class API(BaseAPI):
         only_local: bool = False,
     ):
         """Запрашивает историю чата"""
-        self.send_data(
+        return self.send_data(
             'getChatHistory',
             chat_id=chat_id,
             from_message_id=from_message_id,
@@ -544,6 +544,10 @@ class API(BaseAPI):
             'getMessageLink',
             chat_id=chat_id,
             message_id=message_id,
+            media_timestamp=0,
+            checklist_task_id=0,
+            poll_option_id='',
+            for_album=False,
             in_message_thread=in_message_thread,
         )
 

@@ -62,6 +62,7 @@ class Poll(RawDataclass):
 
     # only pollTypeQuiz
     correct_option_id: int = None
+    correct_option_ids: List[int] = None
     explanation: FormattedText = None
 
     # only pollTypeRegular
@@ -71,8 +72,18 @@ class Poll(RawDataclass):
         if 'question' in self.raw:
             self.question_formatted = FormattedText(self.raw['question'])
             self.question = self.question_formatted.text
-        if 'correct_option_id' in self.raw['type']:
-            self.correct_option_id = self.raw['type']['correct_option_id']
-            self.explanation = FormattedText(self.raw['type']['explanation'])
-        if 'allow_multiple_answers' in self.raw['type']:
-            self.allow_multiple_answers = self.raw['type']['allow_multiple_answers']
+        poll_type = self.raw.get('type', {})
+        if 'correct_option_id' in poll_type:
+            self.correct_option_id = poll_type['correct_option_id']
+            self.correct_option_ids = [self.correct_option_id]
+        elif 'correct_option_ids' in poll_type:
+            self.correct_option_ids = poll_type['correct_option_ids']
+            self.correct_option_id = (
+                self.correct_option_ids[0] if self.correct_option_ids else -1
+            )
+        if 'explanation' in poll_type:
+            self.explanation = FormattedText(poll_type['explanation'])
+        if 'allow_multiple_answers' in poll_type:
+            self.allow_multiple_answers = poll_type['allow_multiple_answers']
+        elif 'allows_multiple_answers' in self.raw:
+            self.allow_multiple_answers = self.raw['allows_multiple_answers']

@@ -77,7 +77,9 @@ class Settings:
 class AsyncTelegram:
     """Асинхронный телеграм клиент"""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self, settings: Settings, install_signal_handlers: bool = True
+    ) -> None:
         self.settings = settings
         self.api = API(self, settings.update_timeout)
         self.authorization = Authorization(self)
@@ -109,9 +111,10 @@ class AsyncTelegram:
 
         self._executor = ThreadPoolExecutor(max_workers=3)
 
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
-        signal.signal(signal.SIGABRT, self._signal_handler)
+        if install_signal_handlers:
+            signal.signal(signal.SIGINT, self._signal_handler)
+            signal.signal(signal.SIGTERM, self._signal_handler)
+            signal.signal(signal.SIGABRT, self._signal_handler)
 
     def _loop_exception_handler(self, loop, context):
         if not isinstance(context.get('exception'), asyncio.exceptions.CancelledError):

@@ -3,3 +3,4 @@ venv
 __pycache__
 tdlib_image/build
 tdlib_image/.env
+!/tdlib_image/build/

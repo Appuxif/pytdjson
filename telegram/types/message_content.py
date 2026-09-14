@@ -160,6 +160,19 @@ class MessageLocation(MessageContentBase):
     heading: int = None
     proximity_alert_radius: int = None
 
+    def _assign_raw(self):
+        """Flatten TDLib 1.8.67 live locations into the legacy shape."""
+        if self.raw.get('@type') != 'messageLiveLocation':
+            return
+
+        live_location = self.raw.get('location') or {}
+        location = live_location.get('location')
+        if location:
+            self.location = Location(location)
+        self.live_period = live_location.get('live_period')
+        self.heading = live_location.get('heading')
+        self.proximity_alert_radius = live_location.get('proximity_alert_radius')
+
 
 @dataclass
 class MessageVenue(MessageContentBase):
@@ -342,6 +355,9 @@ class MessageContentBuilder(ObjectBuilder):
             key = cls.__name__
             key = key[0].lower() + key[1:]
             self.mapping[key] = cls
+        # TDLib split live locations from messageLocation in 1.8.67.  Keep the
+        # existing wrapper class and its flattened fields for callers.
+        self.mapping['messageLiveLocation'] = MessageLocation
 
 
 # For back compatibility

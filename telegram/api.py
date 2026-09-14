@@ -407,6 +407,7 @@ class API(BaseAPI):
             reply_to = {
                 '@type': 'inputMessageReplyToMessage',
                 'checklist_task_id': 0,  # pass 0 to reply to the whole message
+                'poll_option_id': '',  # pass an empty value to reply to the whole poll
                 'message_id': reply_to_message_id,
                 'quote': None,
             }
@@ -544,6 +545,10 @@ class API(BaseAPI):
             'getMessageLink',
             chat_id=chat_id,
             message_id=message_id,
+            media_timestamp=0,
+            checklist_task_id=0,
+            poll_option_id='',
+            for_album=False,
             in_message_thread=in_message_thread,
         )
 
@@ -691,6 +696,7 @@ def _get_send_message_options(
         options['scheduling_state'] = {
             '@type': 'messageSchedulingStateSendAtDate',
             'send_date': send_date,
+            'repeat_period': 0,
         }
 
     if options:

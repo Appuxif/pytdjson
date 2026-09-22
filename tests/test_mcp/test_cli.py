@@ -49,3 +49,17 @@ class CommandLineTestCase(TestCase):
             streamable_http_path='/telegram',
         )
         self.assertIn('http://127.0.0.1:9911/telegram', output.getvalue())
+
+    @patch('telegram.mcp.server.create_server')
+    @patch('telegram.mcp.runtime.TelegramRuntime')
+    @patch('telegram.mcp.cli.load_settings', return_value=object())
+    def test_serve_exits_silently_on_keyboard_interrupt(
+        self, load_settings, runtime_class, create_server
+    ):
+        create_server.return_value.run.side_effect = KeyboardInterrupt
+
+        with patch('sys.stderr', new_callable=StringIO) as output:
+            status = main(['serve'])
+
+        self.assertEqual(0, status)
+        self.assertNotIn('KeyboardInterrupt', output.getvalue())

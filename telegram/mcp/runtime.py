@@ -105,6 +105,12 @@ class _UpdateBuffer:
             removed.append(sequence)
         return removed
 
+    def through(self, cursor: int) -> list[dict]:
+        """Return buffered updates that would be removed by ``commit``."""
+        if cursor > self.next_sequence:
+            raise ValueError('cursor is ahead of the latest update')
+        return [update for sequence, update in self.events if sequence <= cursor]
+
 
 def _update_chat_id(update: dict) -> Optional[int]:
     if update.get('chat_id') is not None:
@@ -136,6 +142,29 @@ def _update_topic_id(update: dict) -> Optional[int]:
         if topic.get(key) is not None:
             return topic[key]
     return None
+
+
+def _incoming_message_ids_by_chat(updates: list[dict]) -> dict[int, list[int]]:
+    """Extract distinct incoming new-message IDs, preserving buffer order."""
+    by_chat: dict[int, list[int]] = {}
+    seen: set[tuple[int, int]] = set()
+    for update in updates:
+        if update.get('@type') != 'updateNewMessage':
+            continue
+        message = update.get('message') or {}
+        chat_id = message.get('chat_id')
+        message_id = message.get('id')
+        if (
+            message.get('is_outgoing')
+            or not isinstance(chat_id, int)
+            or not isinstance(message_id, int)
+            or message_id < 1
+            or (chat_id, message_id) in seen
+        ):
+            continue
+        seen.add((chat_id, message_id))
+        by_chat.setdefault(chat_id, []).append(message_id)
+    return by_chat
 
 
 DEFAULT_UPDATE_EVENT_TYPES = frozenset({'updateNewMessage', 'mcpMessageTranscription'})
@@ -836,12 +865,46 @@ class TelegramRuntime:
             'original_message': original_message,
         }
 
-    async def commit_updates(self, cursor: int) -> dict:
+    async def mark_messages_as_read(self, chat_id: int, message_ids: list[int]) -> dict:
+        """Mark the specified messages as read, even when the chat is closed."""
+        unique_message_ids = list(dict.fromkeys(message_ids))
+        if not unique_message_ids:
+            raise ValueError('message_ids must not be empty')
+        await self.call(
+            'view_messages',
+            chat_id,
+            unique_message_ids,
+            force_read=True,
+        )
+        return {
+            'chat_id': chat_id,
+            'marked_message_ids': unique_message_ids,
+            'marked_count': len(unique_message_ids),
+        }
+
+    async def commit_updates(
+        self, cursor: int, mark_messages_as_read: bool = True
+    ) -> dict:
+        updates = self._updates.through(cursor)
+        read_results = []
+        if mark_messages_as_read:
+            message_ids_by_chat = _incoming_message_ids_by_chat(updates)
+            read_results = await asyncio.gather(
+                *(
+                    self.mark_messages_as_read(chat_id, message_ids)
+                    for chat_id, message_ids in message_ids_by_chat.items()
+                )
+            )
         removed_sequences = self._updates.commit(cursor)
         self._state.delete_updates(removed_sequences)
         return {
             'committed_through': cursor,
             'removed_count': len(removed_sequences),
+            'marked_as_read': mark_messages_as_read,
+            'marked_message_count': sum(
+                result['marked_count'] for result in read_results
+            ),
+            'marked_chat_ids': [result['chat_id'] for result in read_results],
             **self.update_subscription(),
         }
 

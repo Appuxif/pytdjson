@@ -5,7 +5,11 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import AsyncMock, patch
 
-from telegram.mcp.runtime import TelegramRuntime, _UpdateBuffer, _create_mcp_client
+from telegram.mcp.runtime import (
+    TelegramRuntime,
+    _UpdateBuffer,
+    _create_mcp_client,
+)
 
 
 class LoopStub:
@@ -74,17 +78,30 @@ class RuntimeTestCase(TestCase):
                 {'@type': 'updateNewMessage', 'message': {'chat_id': 20}}
             )
             runtime._record_update(
-                {'@type': 'updateNewMessage', 'message': {'chat_id': 10}}
+                {
+                    '@type': 'updateNewMessage',
+                    'message': {'id': 1, 'chat_id': 10, 'is_outgoing': False},
+                }
             )
+
+            calls = []
+
+            async def call(method, *args, **kwargs):
+                calls.append((method, args, kwargs))
+                return {'@type': 'ok'}
+
+            runtime.call = call
 
             updates, cursor, timed_out, cursor_expired = await runtime.poll_updates(
                 timeout=0.01,
                 limit=1,
             )
             committed = await runtime.commit_updates(cursor)
-            return updates, cursor, timed_out, cursor_expired, committed
+            return updates, cursor, timed_out, cursor_expired, committed, calls
 
-        updates, cursor, timed_out, cursor_expired, committed = asyncio.run(exercise())
+        updates, cursor, timed_out, cursor_expired, committed, calls = asyncio.run(
+            exercise()
+        )
 
         self.assertEqual(10, updates[0]['message']['chat_id'])
         self.assertEqual(1, cursor)
@@ -92,6 +109,46 @@ class RuntimeTestCase(TestCase):
         self.assertFalse(cursor_expired)
         self.assertEqual(1, committed['removed_count'])
         self.assertEqual(0, committed['buffer_size'])
+        self.assertEqual(1, committed['marked_message_count'])
+        self.assertEqual([('view_messages', (10, [1]), {'force_read': True})], calls)
+
+    def test_mark_messages_as_read_ignores_outgoing_and_non_message_updates(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(frozenset({10}))
+            runtime._record_update(
+                {
+                    '@type': 'updateNewMessage',
+                    'message': {'id': 1, 'chat_id': 10, 'is_outgoing': False},
+                }
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateNewMessage',
+                    'message': {'id': 2, 'chat_id': 10, 'is_outgoing': True},
+                }
+            )
+            runtime._updates.add(
+                {
+                    '@type': 'mcpMessageTranscription',
+                    'chat_id': 10,
+                    'message_id': 3,
+                }
+            )
+            calls = []
+
+            async def call(method, *args, **kwargs):
+                calls.append((method, args, kwargs))
+                return {'@type': 'ok'}
+
+            runtime.call = call
+            return await runtime.commit_updates(3), calls
+
+        committed, calls = asyncio.run(exercise())
+
+        self.assertEqual(3, committed['removed_count'])
+        self.assertEqual(1, committed['marked_message_count'])
+        self.assertEqual([('view_messages', (10, [1]), {'force_read': True})], calls)
 
     def test_only_new_messages_are_buffered_and_sent_ids_are_ignored(self):
         async def exercise():

@@ -6,7 +6,7 @@ from unittest import TestCase
 from mcp.server.mcpserver.exceptions import ToolError
 
 from telegram.mcp.config import load_settings
-from telegram.mcp.server import create_server
+from telegram.mcp.server import TELEGRAM_MESSAGE_DISCLAIMER, create_server
 
 
 def awaitable_call(server, name, arguments):
@@ -82,10 +82,23 @@ class RuntimeStub:
             False,
         )
 
-    async def commit_updates(self, cursor):
+    async def mark_messages_as_read(self, chat_id, message_ids):
+        self.calls.append(
+            ('view_messages', (chat_id, message_ids), {'force_read': True})
+        )
+        return {
+            'chat_id': chat_id,
+            'marked_message_ids': list(dict.fromkeys(message_ids)),
+            'marked_count': len(set(message_ids)),
+        }
+
+    async def commit_updates(self, cursor, mark_messages_as_read=True):
         return {
             'committed_through': cursor,
             'removed_count': 1,
+            'marked_as_read': mark_messages_as_read,
+            'marked_message_count': 1 if mark_messages_as_read else 0,
+            'marked_chat_ids': [10] if mark_messages_as_read else [],
             **self.update_subscription(),
         }
 
@@ -343,7 +356,7 @@ class ServerTestCase(TestCase):
             )
             tools = asyncio.run(create_server(settings).list_tools())
 
-        self.assertEqual(39, len(tools))
+        self.assertEqual(40, len(tools))
         tool_names = [tool.name for tool in tools]
         self.assertNotIn('view_messages', tool_names)
         self.assertIn('send_message', tool_names)
@@ -353,6 +366,7 @@ class ServerTestCase(TestCase):
             'subscribe_for_updates',
             'unsubscribe_from_updates',
             'commit_updates',
+            'mark_messages_as_read',
             'send_message',
             'forward_messages',
             'request_message_transcript',
@@ -383,6 +397,31 @@ class ServerTestCase(TestCase):
             tool for tool in tools if tool.name == 'get_forum_topic_history'
         )
         self.assertIn('oldest returned message ID', topic_history.description)
+        message_bearing_tools = {
+            'get_chat',
+            'poll_updates',
+            'get_chat_history',
+            'get_chat_history_complete',
+            'search_messages',
+            'get_conversation_context',
+            'get_forum_topics',
+            'get_forum_topic',
+            'get_forum_topic_history',
+            'get_message_thread',
+            'get_message_thread_history',
+            'get_message',
+            'request_message_transcript',
+            'send_message',
+            'forward_messages',
+            'search_public_chat',
+        }
+        self.assertTrue(
+            all(
+                TELEGRAM_MESSAGE_DISCLAIMER in tool.description
+                for tool in tools
+                if tool.name in message_bearing_tools
+            )
+        )
 
     def test_request_message_transcript_returns_pending_status(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -404,6 +443,9 @@ class ServerTestCase(TestCase):
             )
 
         payload = json.loads(result.content[0].text)
+        self.assertEqual(
+            TELEGRAM_MESSAGE_DISCLAIMER, payload['telegram_message_disclaimer']
+        )
         self.assertEqual('pending', payload['status'])
         self.assertEqual(10, payload['chat_id'])
         self.assertEqual(77, payload['message_id'])
@@ -515,12 +557,43 @@ class ServerTestCase(TestCase):
             committed = awaitable_call(server, 'commit_updates', {'cursor': 5})
 
         payload = json.loads(polled.content[0].text)
+        self.assertEqual(
+            TELEGRAM_MESSAGE_DISCLAIMER, payload['telegram_message_disclaimer']
+        )
         self.assertEqual(77, payload['update']['message']['id'])
         self.assertEqual([77], [item['message']['id'] for item in payload['updates']])
         self.assertEqual(5, payload['next_cursor'])
         self.assertFalse(payload['timed_out'])
         self.assertEqual([(3, 1, 2)], runtime.poll_calls)
-        self.assertEqual(1, json.loads(committed.content[0].text)['removed_count'])
+        committed_payload = json.loads(committed.content[0].text)
+        self.assertEqual(1, committed_payload['removed_count'])
+        self.assertTrue(committed_payload['marked_as_read'])
+
+    def test_mark_messages_as_read_deduplicates_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            result = awaitable_call(
+                create_server(settings, runtime),
+                'mark_messages_as_read',
+                {'chat_id': 10, 'message_ids': [77, 78, 77]},
+            )
+
+        payload = json.loads(result.content[0].text)
+        self.assertEqual(10, payload['chat_id'])
+        self.assertEqual([77, 78], payload['marked_message_ids'])
+        self.assertEqual(
+            [('view_messages', (10, [77, 78, 77]), {'force_read': True})],
+            runtime.calls,
+        )
 
     def test_tool_returns_structured_compact_result(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -593,6 +666,10 @@ class ServerTestCase(TestCase):
 
         first_payload = json.loads(first.content[0].text)
         second_payload = json.loads(second.content[0].text)
+        self.assertEqual(
+            TELEGRAM_MESSAGE_DISCLAIMER,
+            first_payload['telegram_message_disclaimer'],
+        )
         self.assertEqual('{"from_message_id":66}', first_payload['next_cursor'])
         self.assertEqual(
             'User 3', first_payload['messages'][0]['sender_details']['first_name']
@@ -630,6 +707,10 @@ class ServerTestCase(TestCase):
 
         context_payload = json.loads(context.content[0].text)
         file_payload = json.loads(file_result.content[0].text)
+        self.assertEqual(
+            TELEGRAM_MESSAGE_DISCLAIMER,
+            context_payload['telegram_message_disclaimer'],
+        )
         self.assertEqual(77, context_payload['message']['id'])
         self.assertEqual(
             [76, 77, 78], [item['id'] for item in context_payload['messages']]
@@ -696,6 +777,9 @@ class ServerTestCase(TestCase):
             )
 
         payload = json.loads(result.content[0].text)
+        self.assertEqual(
+            TELEGRAM_MESSAGE_DISCLAIMER, payload['telegram_message_disclaimer']
+        )
         self.assertEqual(99, payload['id'])
         self.assertEqual(
             (

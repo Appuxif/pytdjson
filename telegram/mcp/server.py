@@ -478,6 +478,7 @@ def create_server(
         from_message_id = 0
         pages_fetched = 0
         stalled = False
+        history_ended = False
         while len(messages_by_id) < limit and pages_fetched < max_pages:
             remaining = limit - len(messages_by_id)
             # TDLib includes from_message_id in the next page, so request one
@@ -498,6 +499,7 @@ def create_server(
                 if item.get('id') is not None:
                     messages_by_id[item['id']] = item
             if not page:
+                history_ended = True
                 break
             oldest_message_id = min(
                 (item.get('id') for item in page if item.get('id') is not None),
@@ -518,7 +520,7 @@ def create_server(
             'messages': await _project_messages(messages, include_sender_details),
             'oldest_message_id': min((item.get('id') for item in messages), default=0),
             'pages_fetched': pages_fetched,
-            'complete': len(messages) >= limit or not messages or stalled,
+            'complete': len(messages) >= limit or history_ended,
             'max_pages_reached': pages_fetched >= max_pages
             and len(messages) < limit
             and not stalled,

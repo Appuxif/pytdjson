@@ -224,18 +224,32 @@ def _transcript(content: dict) -> Optional[dict]:
     return None
 
 
+def _project_content(content: Optional[dict]) -> dict:
+    content = content or {}
+    text = content.get('text') or content.get('caption') or {}
+    sticker = content.get('sticker') or {}
+    text_value = text.get('text') if isinstance(text, dict) else None
+    if content.get('@type') == 'messageSticker' and text_value is None:
+        text_value = sticker.get('emoji')
+    return {
+        'content_type': content.get('@type'),
+        'text': text_value,
+        'entities': text.get('entities') if isinstance(text, dict) else None,
+        'transcript': _transcript(content),
+        'sticker_emoji': sticker.get('emoji'),
+        'sticker_id': sticker.get('id'),
+        'sticker_set_id': sticker.get('set_id'),
+        'sticker_is_premium': content.get('is_premium'),
+        'media': _media(content),
+    }
+
+
 def message(
     value: Optional[dict], sender_details: Optional[dict] = None
 ) -> Optional[dict]:
     if not value:
         return None
     content = value.get('content') or {}
-    text = content.get('text') or content.get('caption') or {}
-    sticker = content.get('sticker') or {}
-    sticker_emoji = sticker.get('emoji')
-    text_value = text.get('text') if isinstance(text, dict) else None
-    if content.get('@type') == 'messageSticker' and text_value is None:
-        text_value = sticker_emoji
     result = {
         'id': value.get('id'),
         'chat_id': value.get('chat_id'),
@@ -245,14 +259,6 @@ def message(
         'is_outgoing': value.get('is_outgoing'),
         'topic_id': _topic_id(value.get('topic_id')),
         'reply_to': _reply_to(value.get('reply_to')),
-        'content_type': content.get('@type'),
-        'text': text_value,
-        'entities': text.get('entities') if isinstance(text, dict) else None,
-        'transcript': _transcript(content),
-        'sticker_emoji': sticker_emoji,
-        'sticker_id': sticker.get('id'),
-        'sticker_set_id': sticker.get('set_id'),
-        'sticker_is_premium': content.get('is_premium'),
         'is_pinned': value.get('is_pinned'),
         'is_channel_post': value.get('is_channel_post'),
         'reply_info': _reply_info(value.get('interaction_info', {}).get('reply_info'))
@@ -260,7 +266,7 @@ def message(
         else None,
         'interaction': _interaction(value.get('interaction_info')),
         'forward': _forward(value.get('forward_info')),
-        'media': _media(content),
+        **_project_content(content),
     }
     if sender_details is not None:
         result['sender_details'] = sender_details
@@ -386,6 +392,8 @@ def update(value: Optional[dict]) -> Optional[dict]:
 
     if 'message' in value:
         result['message'] = message(value['message'])
+    if value.get('@type') == 'updateMessageContent':
+        result['new_content'] = _project_content(value.get('new_content'))
     if 'chat' in value:
         result['chat'] = chat(value['chat'], include_last_message=False)
     if 'error' in value:

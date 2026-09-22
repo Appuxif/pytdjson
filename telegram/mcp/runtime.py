@@ -133,6 +133,8 @@ def _update_message_id(update: dict) -> Optional[int]:
 
 
 def _update_topic_id(update: dict) -> Optional[int]:
+    if update.get('_mcp_resolved_topic_id') is not None:
+        return update['_mcp_resolved_topic_id']
     message = update.get('message') or update.get('original_message') or {}
     topic = message.get('topic_id') or {}
     for key in (
@@ -615,7 +617,7 @@ class TelegramRuntime:
             return
         self._mcp_loop.call_soon_threadsafe(self._record_update, raw_update)
 
-    def _record_update(self, update: dict) -> None:
+    def _record_update(self, update: dict, *, topic_resolved: bool = False) -> None:
         update_type = update.get('@type')
         if update_type == 'updateMessageContent':
             self._record_transcription_update(update)
@@ -624,10 +626,36 @@ class TelegramRuntime:
         chat_id = _update_chat_id(update)
         message_id = _update_message_id(update)
         if (
+            update_type == 'updateMessageSendSucceeded'
+            and chat_id is not None
+            and isinstance(update.get('old_message_id'), int)
+            and (chat_id, update['old_message_id']) in self._ignored_message_ids
+        ):
+            if message_id is not None:
+                self._remember_sent_message(chat_id, message_id)
+            return
+        if (
             chat_id is not None
             and message_id is not None
             and (chat_id, message_id) in self._ignored_message_ids
         ):
+            return
+        subscription = self._subscriptions.get(chat_id)
+        event_types = (
+            (subscription or {}).get('event_types') or DEFAULT_UPDATE_EVENT_TYPES
+        )
+        if (
+            not topic_resolved
+            and subscription
+            and ('*' in event_types or update_type in event_types)
+            and subscription.get('topic_ids')
+            and message_id is not None
+            and _update_topic_id(update) is None
+            and self._mcp_loop is not None
+        ):
+            self._mcp_loop.create_task(
+                self._record_update_with_resolved_topic(update, chat_id, message_id)
+            )
             return
         if _update_matches_subscription(update, self._subscriptions):
             sequence = self._updates.add(update)
@@ -637,6 +665,20 @@ class TelegramRuntime:
                 self._updates.maxlen,
                 self._updates.dropped_count,
             )
+
+    async def _record_update_with_resolved_topic(
+        self, update: dict, chat_id: int, message_id: int
+    ) -> None:
+        try:
+            message = await self.call('get_message', message_id, chat_id)
+        except TelegramMCPError:
+            return
+        resolved_topic = _update_topic_id({'message': message})
+        if resolved_topic is None:
+            return
+        resolved_update = dict(update)
+        resolved_update['_mcp_resolved_topic_id'] = resolved_topic
+        self._record_update(resolved_update, topic_resolved=True)
 
     def _record_transcription_update(self, update: dict) -> None:
         chat_id = _update_chat_id(update)
@@ -668,13 +710,14 @@ class TelegramRuntime:
             update['text'] = result.get('text', '')
         else:
             update['error'] = result.get('error') or {}
-        sequence = self._updates.add(update)
-        self._state.add_update(
-            sequence,
-            update,
-            self._updates.maxlen,
-            self._updates.dropped_count,
-        )
+        if _update_matches_subscription(update, self._subscriptions):
+            sequence = self._updates.add(update)
+            self._state.add_update(
+                sequence,
+                update,
+                self._updates.maxlen,
+                self._updates.dropped_count,
+            )
         self._transcription_requests.pop((chat_id, message_id), None)
         self._state.delete_transcription_request(chat_id, message_id)
 

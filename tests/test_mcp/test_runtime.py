@@ -200,6 +200,56 @@ class RuntimeTestCase(TestCase):
         self.assertEqual([1, 3], [item['message']['id'] for item in updates])
         self.assertFalse(timed_out)
 
+    def test_reaction_updates_require_an_explicit_event_subscription(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(
+                frozenset({10}),
+                event_types={'updateMessageInteractionInfo', 'updateMessageReaction'},
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateMessageInteractionInfo',
+                    'chat_id': 10,
+                    'message_id': 1,
+                    'interaction_info': {},
+                }
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateMessageReaction',
+                    'chat_id': 10,
+                    'message_id': 1,
+                    'new_reaction_types': [],
+                }
+            )
+            return await runtime.poll_updates(timeout=0.01, limit=2)
+
+        updates, _, timed_out, _ = asyncio.run(exercise())
+        self.assertEqual(
+            ['updateMessageInteractionInfo', 'updateMessageReaction'],
+            [item['@type'] for item in updates],
+        )
+        self.assertFalse(timed_out)
+
+    def test_default_subscription_does_not_collect_reaction_updates(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(frozenset({10}))
+            runtime._record_update(
+                {
+                    '@type': 'updateMessageInteractionInfo',
+                    'chat_id': 10,
+                    'message_id': 1,
+                    'interaction_info': {},
+                }
+            )
+            return await runtime.poll_updates(timeout=0.01, limit=1)
+
+        updates, _, timed_out, _ = asyncio.run(exercise())
+        self.assertEqual([], updates)
+        self.assertTrue(timed_out)
+
     def test_dropped_updates_are_reported_and_persisted(self):
         async def exercise():
             runtime = TelegramRuntime(SimpleNamespace())

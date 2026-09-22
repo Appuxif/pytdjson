@@ -42,12 +42,45 @@ CURSOR = Annotated[int, Field(ge=0)]
 TEXT_CURSOR = Annotated[str, Field(max_length=4096)]
 MESSAGE_TEXT = Annotated[str, Field(min_length=1, max_length=4096)]
 MESSAGE_ID = Annotated[int, Field(ge=1)]
+REACTION_VALUE = Annotated[str, Field(min_length=1, max_length=256)]
+REACTION_OFFSET = Annotated[str, Field(max_length=4096)]
 FORWARD_MESSAGE_IDS = Annotated[
     list[Annotated[int, Field(ge=1)]], Field(min_length=1, max_length=100)
 ]
 FILE_ID = Annotated[int, Field(ge=1)]
 EVENT_TYPES = Annotated[list[str], Field(min_length=1, max_length=50)]
 TOPIC_IDS = Annotated[list[int], Field(min_length=1, max_length=200)]
+
+REACTION_TYPE_VALUES = {
+    'emoji': 'reactionTypeEmoji',
+    'custom_emoji': 'reactionTypeCustomEmoji',
+}
+
+
+def _normalize_reaction(reaction_type: str, value: str | None) -> tuple[str, str | int]:
+    if reaction_type not in REACTION_TYPE_VALUES:
+        raise ToolError(
+            'reaction_type must be either "emoji" or "custom_emoji"; '
+            'paid reactions are not supported'
+        )
+    if value is None or not value.strip():
+        raise ToolError('reaction value must contain a non-whitespace character')
+    if reaction_type == 'custom_emoji':
+        if not value.isascii() or not value.isdigit() or int(value) < 1:
+            raise ToolError('custom_emoji value must be a positive numeric ID')
+        return REACTION_TYPE_VALUES[reaction_type], int(value)
+    return REACTION_TYPE_VALUES[reaction_type], value
+
+
+def _normalize_optional_reaction(
+    reaction_type: str | None, value: str | None
+) -> tuple[str | None, str | int | None]:
+    if reaction_type is None:
+        if value is not None:
+            raise ToolError('value requires reaction_type')
+        return None, None
+    return _normalize_reaction(reaction_type, value)
+
 
 MESSAGE_FILTERS = {
     'all': None,
@@ -126,6 +159,16 @@ def create_server(
     )
 
     sender_cache: dict[int, dict] = {}
+
+    def _ensure_chat_send_allowed(chat_id: int) -> None:
+        if (
+            not settings.mcp_allow_send_to_all_chats
+            and chat_id not in settings.mcp_allowed_send_to_chats
+        ):
+            raise ToolError(
+                f'sending messages to chat {chat_id} is not allowed; '
+                'configure PYTDJSON_ALLOW_SEND_TO_CHATS'
+            )
 
     async def _sender_details(messages: list[dict]) -> dict[int, dict]:
         user_ids = {
@@ -685,6 +728,51 @@ def create_server(
         )
 
     @mcp.tool(annotations=READ_ONLY)
+    async def get_message_available_reactions(
+        chat_id: CHAT_ID,
+        message_id: MESSAGE_ID,
+        row_size: Annotated[int, Field(ge=5, le=25)] = 25,
+    ) -> dict:
+        """List reactions that can currently be added to a message."""
+        result = await runtime.get_message_available_reactions(
+            chat_id, message_id, row_size=row_size
+        )
+        return {
+            'chat_id': chat_id,
+            'message_id': message_id,
+            **(projection.available_reactions(result) or {}),
+        }
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_message_added_reactions(
+        chat_id: CHAT_ID,
+        message_id: MESSAGE_ID,
+        reaction_type: str | None = None,
+        value: REACTION_VALUE | None = None,
+        offset: REACTION_OFFSET = '',
+        limit: LIMIT = 100,
+    ) -> dict:
+        """List users and reactions applied to a message."""
+        tdlib_reaction_type, tdlib_value = _normalize_optional_reaction(
+            reaction_type, value
+        )
+        result = await runtime.get_message_added_reactions(
+            chat_id,
+            message_id,
+            reaction_type=tdlib_reaction_type,
+            value=tdlib_value or '',
+            offset=offset,
+            limit=limit,
+        )
+        return {
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'reaction_type': reaction_type,
+            'value': value,
+            **(projection.added_reactions(result) or {}),
+        }
+
+    @mcp.tool(annotations=READ_ONLY)
     async def get_file(file_id: FILE_ID) -> dict:
         """Get local and remote metadata for a Telegram file."""
         return projection.file(await runtime.call('get_file', file_id))
@@ -743,14 +831,7 @@ def create_server(
         """
         if not text.strip():
             raise ToolError('text must contain a non-whitespace character')
-        if (
-            not settings.mcp_allow_send_to_all_chats
-            and chat_id not in settings.mcp_allowed_send_to_chats
-        ):
-            raise ToolError(
-                f'sending messages to chat {chat_id} is not allowed; '
-                'configure PYTDJSON_ALLOW_SEND_TO_CHATS'
-            )
+        _ensure_chat_send_allowed(chat_id)
         if message_thread_id is not None and forum_topic_id is not None:
             raise ToolError(
                 'message_thread_id and forum_topic_id cannot be used together'
@@ -784,14 +865,7 @@ def create_server(
         Such failures are returned in ``failed_message_ids`` while successful
         messages remain in source order.
         """
-        if (
-            not settings.mcp_allow_send_to_all_chats
-            and to_chat_id not in settings.mcp_allowed_send_to_chats
-        ):
-            raise ToolError(
-                f'sending messages to chat {to_chat_id} is not allowed; '
-                'configure PYTDJSON_ALLOW_SEND_TO_CHATS'
-            )
+        _ensure_chat_send_allowed(to_chat_id)
         if any(left >= right for left, right in zip(message_ids, message_ids[1:])):
             raise ToolError('message_ids must be strictly increasing')
 
@@ -828,6 +902,62 @@ def create_server(
             'failed_message_ids': failed_message_ids,
             'forwarded_count': len(message_ids) - len(failed_message_ids),
             'failed_count': len(failed_message_ids),
+        }
+
+    @mcp.tool(annotations=SEND)
+    async def add_message_reaction(
+        chat_id: CHAT_ID,
+        message_id: MESSAGE_ID,
+        reaction_type: str,
+        value: REACTION_VALUE,
+        is_big: bool = False,
+        update_recent_reactions: bool = False,
+    ) -> dict:
+        """Add an emoji or custom emoji reaction to an allowlisted message."""
+        _ensure_chat_send_allowed(chat_id)
+        tdlib_reaction_type, tdlib_value = _normalize_reaction(reaction_type, value)
+        await runtime.add_message_reaction(
+            chat_id,
+            message_id,
+            tdlib_reaction_type,
+            tdlib_value,
+            is_big=is_big,
+            update_recent_reactions=update_recent_reactions,
+        )
+        return {
+            'ok': True,
+            'operation': 'add',
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'reaction_type': reaction_type,
+            'value': value,
+            'is_big': is_big,
+            'update_recent_reactions': update_recent_reactions,
+        }
+
+    @mcp.tool(annotations=SEND)
+    async def remove_message_reaction(
+        chat_id: CHAT_ID,
+        message_id: MESSAGE_ID,
+        reaction_type: str,
+        value: REACTION_VALUE,
+    ) -> dict:
+        """Remove an emoji or custom emoji reaction from an allowlisted message."""
+        _ensure_chat_send_allowed(chat_id)
+        tdlib_reaction_type, tdlib_value = _normalize_reaction(reaction_type, value)
+        await runtime.remove_message_reaction(
+            chat_id,
+            message_id,
+            tdlib_reaction_type,
+            tdlib_value,
+        )
+        return {
+            'ok': True,
+            'operation': 'remove',
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'reaction_type': reaction_type,
+            'value': value,
         }
 
     @mcp.tool(annotations=READ_ONLY)

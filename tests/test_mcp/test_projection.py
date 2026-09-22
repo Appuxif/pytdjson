@@ -123,6 +123,72 @@ class ProjectionTestCase(TestCase):
         self.assertEqual(4, result['interaction']['view_count'])
         self.assertEqual('👍', result['interaction']['reactions'][0]['emoji'])
 
+    def test_reaction_results_are_projected_without_media_payloads(self):
+        available = projection.available_reactions(
+            {
+                'top_reactions': [
+                    {
+                        'type': {
+                            '@type': 'reactionTypeEmoji',
+                            'emoji': '👍',
+                        },
+                        'needs_premium': False,
+                    },
+                    {
+                        'type': {
+                            '@type': 'reactionTypeCustomEmoji',
+                            'custom_emoji_id': 123,
+                        },
+                        'needs_premium': True,
+                    },
+                ],
+                'recent_reactions': [],
+                'popular_reactions': [],
+                'allow_custom_emoji': True,
+                'are_tags': False,
+                'unavailability_reason': None,
+            }
+        )
+        added = projection.added_reactions(
+            {
+                'total_count': 1,
+                'reactions': [
+                    {
+                        'type': {
+                            '@type': 'reactionTypeEmoji',
+                            'emoji': '👍',
+                        },
+                        'sender_id': {
+                            '@type': 'messageSenderUser',
+                            'user_id': 7,
+                        },
+                        'is_outgoing': True,
+                        'date': 123,
+                    }
+                ],
+                'next_offset': 'next',
+            }
+        )
+
+        self.assertEqual(
+            {
+                'type': 'reactionTypeEmoji',
+                'emoji': '👍',
+            },
+            available['top_reactions'][0]['reaction'],
+        )
+        self.assertEqual(
+            123, available['top_reactions'][1]['reaction']['custom_emoji_id']
+        )
+        self.assertEqual(
+            {
+                'type': 'messageSenderUser',
+                'user_id': 7,
+            },
+            added['reactions'][0]['sender'],
+        )
+        self.assertEqual('next', added['next_offset'])
+
     def test_message_transcription_update_keeps_original_message_metadata(self):
         result = projection.update(
             {

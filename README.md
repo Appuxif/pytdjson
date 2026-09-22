@@ -68,6 +68,15 @@ does not support forwarding into ordinary non-forum message threads. Protected
 or otherwise unavailable source messages are reported individually in
 `failed_message_ids`, while successful messages remain in source order.
 
+The `add_message_reaction` and `remove_message_reaction` tools use the same
+allowlist and support standard emoji and custom emoji reactions. Paid Star
+reactions and bot-only reaction management are not exposed. The read-only
+`get_message_available_reactions` and `get_message_added_reactions` tools do
+not require the send allowlist; the latter uses TDLib's opaque `next_offset`
+for pagination. Reaction update events are available only when explicitly
+selected in `subscribe_for_updates` with `updateMessageInteractionInfo` or
+`updateMessageReaction`.
+
 For live updates, first call `subscribe_for_updates` with the chat IDs of
 interest. Calling `poll_updates` without any subscriptions returns an error
 immediately. Otherwise it waits for up to `limit` updates, where `limit`

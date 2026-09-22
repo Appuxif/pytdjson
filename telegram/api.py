@@ -857,13 +857,14 @@ class API(BaseAPI):
         message_id: int,
         reaction_type: Optional[ReactionType] = None,
         value: Union[str, int] = '',
-        offset: int = 0,
+        offset: Union[str, int] = '',
         limit: int = 100,
     ):
         """Запрос на информацию о добавленных реакциях к сообщению"""
-        limit = min(limit, 100)
+        limit = min(max(limit, 1), 100)
         if reaction_type is not None:
             reaction_type = ReactionType(reaction_type).build(value)
+        offset = '' if offset is None else str(offset)
         return self.send_data(
             'getMessageAddedReactions',
             chat_id=chat_id,

@@ -859,6 +859,18 @@ class TelegramRuntime:
                 self._remember_sent_message(message['id'])
         return result
 
+    async def add_message_reaction(self, *args: Any, **kwargs: Any) -> dict:
+        return await self.call('add_message_reaction', *args, **kwargs)
+
+    async def remove_message_reaction(self, *args: Any, **kwargs: Any) -> dict:
+        return await self.call('remove_message_reaction', *args, **kwargs)
+
+    async def get_message_available_reactions(self, *args: Any, **kwargs: Any) -> dict:
+        return await self.call('get_message_available_reactions', *args, **kwargs)
+
+    async def get_message_added_reactions(self, *args: Any, **kwargs: Any) -> dict:
+        return await self.call('get_message_added_reactions', *args, **kwargs)
+
     async def call(self, method: str, *args: Any, **kwargs: Any) -> dict:
         if not self.client or not self.client.is_enabled:
             raise TelegramMCPError('TDLib client is not running')

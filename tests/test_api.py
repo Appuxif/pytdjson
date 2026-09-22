@@ -218,6 +218,85 @@ class ApiTestCase(TestCase):
             self.client.query,
         )
 
+    def test_reaction_methods_use_tdlib_reaction_types(self):
+        self.api.get_message_available_reactions(1, 2, row_size=7)
+        self.assertEqual(
+            {
+                '@type': 'getMessageAvailableReactions',
+                'chat_id': 1,
+                'message_id': 2,
+                'row_size': 7,
+            },
+            self.client.query,
+        )
+
+        self.api.add_message_reaction(
+            1,
+            2,
+            'reactionTypeEmoji',
+            '👍',
+            is_big=True,
+            update_recent_reactions=True,
+        )
+        self.assertEqual(
+            {
+                '@type': 'addMessageReaction',
+                'chat_id': 1,
+                'message_id': 2,
+                'reaction_type': {
+                    '@type': 'reactionTypeEmoji',
+                    'emoji': '👍',
+                },
+                'is_big': True,
+                'update_recent_reactions': True,
+            },
+            self.client.query,
+        )
+
+        self.api.remove_message_reaction(
+            1,
+            2,
+            'reactionTypeCustomEmoji',
+            123456789,
+        )
+        self.assertEqual(
+            {
+                '@type': 'removeMessageReaction',
+                'chat_id': 1,
+                'message_id': 2,
+                'reaction_type': {
+                    '@type': 'reactionTypeCustomEmoji',
+                    'custom_emoji_id': 123456789,
+                },
+            },
+            self.client.query,
+        )
+
+    def test_added_reactions_use_string_pagination_offset(self):
+        self.api.get_message_added_reactions(
+            1,
+            2,
+            reaction_type='reactionTypeEmoji',
+            value='❤️',
+            offset='next-page',
+            limit=25,
+        )
+
+        self.assertEqual(
+            {
+                '@type': 'getMessageAddedReactions',
+                'chat_id': 1,
+                'message_id': 2,
+                'reaction_type': {
+                    '@type': 'reactionTypeEmoji',
+                    'emoji': '❤️',
+                },
+                'limit': 25,
+                'offset': 'next-page',
+            },
+            self.client.query,
+        )
+
     def test_send_message_uses_forum_topic(self):
         self.api.send_message(
             1,

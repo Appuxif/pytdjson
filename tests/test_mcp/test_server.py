@@ -95,6 +95,18 @@ class RuntimeStub:
     async def forward_messages(self, *args, **kwargs):
         return await self.call('forward_messages', *args, **kwargs)
 
+    async def add_message_reaction(self, *args, **kwargs):
+        return await self.call('add_message_reaction', *args, **kwargs)
+
+    async def remove_message_reaction(self, *args, **kwargs):
+        return await self.call('remove_message_reaction', *args, **kwargs)
+
+    async def get_message_available_reactions(self, *args, **kwargs):
+        return await self.call('get_message_available_reactions', *args, **kwargs)
+
+    async def get_message_added_reactions(self, *args, **kwargs):
+        return await self.call('get_message_added_reactions', *args, **kwargs)
+
     async def request_message_transcript(self, chat_id, message_id):
         return {
             'status': 'pending',
@@ -272,6 +284,48 @@ class RuntimeStub:
                     None,
                 ],
             }
+        if method == 'add_message_reaction':
+            return {'@type': 'ok'}
+        if method == 'remove_message_reaction':
+            return {'@type': 'ok'}
+        if method == 'get_message_available_reactions':
+            return {
+                '@type': 'availableReactions',
+                'top_reactions': [
+                    {
+                        'type': {
+                            '@type': 'reactionTypeEmoji',
+                            'emoji': '👍',
+                        },
+                        'needs_premium': False,
+                    }
+                ],
+                'recent_reactions': [],
+                'popular_reactions': [],
+                'allow_custom_emoji': True,
+                'are_tags': False,
+                'unavailability_reason': None,
+            }
+        if method == 'get_message_added_reactions':
+            return {
+                '@type': 'addedReactions',
+                'total_count': 1,
+                'reactions': [
+                    {
+                        'type': {
+                            '@type': 'reactionTypeEmoji',
+                            'emoji': '👍',
+                        },
+                        'sender_id': {
+                            '@type': 'messageSenderUser',
+                            'user_id': 3,
+                        },
+                        'is_outgoing': True,
+                        'date': 123,
+                    }
+                ],
+                'next_offset': 'next',
+            }
         raise AssertionError(method)
 
 
@@ -289,7 +343,7 @@ class ServerTestCase(TestCase):
             )
             tools = asyncio.run(create_server(settings).list_tools())
 
-        self.assertEqual(35, len(tools))
+        self.assertEqual(39, len(tools))
         tool_names = [tool.name for tool in tools]
         self.assertNotIn('view_messages', tool_names)
         self.assertIn('send_message', tool_names)
@@ -302,6 +356,8 @@ class ServerTestCase(TestCase):
             'send_message',
             'forward_messages',
             'request_message_transcript',
+            'add_message_reaction',
+            'remove_message_reaction',
         }
         self.assertTrue(
             all(
@@ -316,6 +372,11 @@ class ServerTestCase(TestCase):
         forward_tool = next(tool for tool in tools if tool.name == 'forward_messages')
         self.assertFalse(forward_tool.annotations.read_only_hint)
         self.assertFalse(forward_tool.annotations.idempotent_hint)
+        add_reaction_tool = next(
+            tool for tool in tools if tool.name == 'add_message_reaction'
+        )
+        self.assertFalse(add_reaction_tool.annotations.read_only_hint)
+        self.assertFalse(add_reaction_tool.annotations.idempotent_hint)
         history = next(tool for tool in tools if tool.name == 'get_chat_history')
         self.assertIn('oldest message ID', history.description)
         topic_history = next(
@@ -649,6 +710,170 @@ class ServerTestCase(TestCase):
             ),
             runtime.calls[-1],
         )
+
+    def test_reaction_tools_use_allowlist_and_tdlib_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                    'PYTDJSON_ALLOW_SEND_TO_CHATS': '10',
+                }
+            )
+            runtime = RuntimeStub()
+            server = create_server(settings, runtime)
+            added = awaitable_call(
+                server,
+                'add_message_reaction',
+                {
+                    'chat_id': 10,
+                    'message_id': 77,
+                    'reaction_type': 'emoji',
+                    'value': '👍',
+                    'is_big': True,
+                    'update_recent_reactions': True,
+                },
+            )
+            removed = awaitable_call(
+                server,
+                'remove_message_reaction',
+                {
+                    'chat_id': 10,
+                    'message_id': 77,
+                    'reaction_type': 'custom_emoji',
+                    'value': '123456789',
+                },
+            )
+
+        added_payload = json.loads(added.content[0].text)
+        removed_payload = json.loads(removed.content[0].text)
+        self.assertTrue(added_payload['ok'])
+        self.assertEqual('add', added_payload['operation'])
+        self.assertTrue(removed_payload['ok'])
+        self.assertEqual(
+            (
+                'add_message_reaction',
+                (10, 77, 'reactionTypeEmoji', '👍'),
+                {'is_big': True, 'update_recent_reactions': True},
+            ),
+            runtime.calls[-2],
+        )
+        self.assertEqual(
+            (
+                'remove_message_reaction',
+                (10, 77, 'reactionTypeCustomEmoji', 123456789),
+                {},
+            ),
+            runtime.calls[-1],
+        )
+
+    def test_reactions_are_denied_without_target_allowlist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            with self.assertRaises(ToolError) as error:
+                awaitable_call(
+                    create_server(settings, runtime),
+                    'add_message_reaction',
+                    {
+                        'chat_id': 10,
+                        'message_id': 77,
+                        'reaction_type': 'emoji',
+                        'value': '👍',
+                    },
+                )
+
+        self.assertIn('not allowed', str(error.exception))
+        self.assertEqual([], runtime.calls)
+
+    def test_reaction_read_tools_do_not_require_send_permission(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            server = create_server(settings, runtime)
+            available = awaitable_call(
+                server,
+                'get_message_available_reactions',
+                {'chat_id': 10, 'message_id': 77},
+            )
+            added = awaitable_call(
+                server,
+                'get_message_added_reactions',
+                {
+                    'chat_id': 10,
+                    'message_id': 77,
+                    'reaction_type': 'emoji',
+                    'value': '👍',
+                    'offset': 'next-page',
+                    'limit': 25,
+                },
+            )
+
+        available_payload = json.loads(available.content[0].text)
+        added_payload = json.loads(added.content[0].text)
+        self.assertEqual(
+            '👍', available_payload['top_reactions'][0]['reaction']['emoji']
+        )
+        self.assertEqual('next', added_payload['next_offset'])
+        self.assertEqual(
+            (
+                'get_message_added_reactions',
+                (10, 77),
+                {
+                    'reaction_type': 'reactionTypeEmoji',
+                    'value': '👍',
+                    'offset': 'next-page',
+                    'limit': 25,
+                },
+            ),
+            runtime.calls[-1],
+        )
+
+    def test_reactions_reject_paid_and_malformed_custom_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                    'PYTDJSON_ALLOW_SEND_TO_CHATS': '10',
+                }
+            )
+            runtime = RuntimeStub()
+            server = create_server(settings, runtime)
+            for value in (
+                {'reaction_type': 'paid', 'value': '1'},
+                {'reaction_type': 'custom_emoji', 'value': 'not-an-id'},
+            ):
+                with self.assertRaises(ToolError):
+                    awaitable_call(
+                        server,
+                        'add_message_reaction',
+                        {'chat_id': 10, 'message_id': 77, **value},
+                    )
+
+        self.assertEqual([], runtime.calls)
 
     def test_forward_messages_is_denied_when_destination_is_not_allowlisted(self):
         with tempfile.TemporaryDirectory() as directory:

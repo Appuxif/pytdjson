@@ -156,6 +156,25 @@ def _forward(value: Optional[dict]) -> Optional[dict]:
     return result
 
 
+def _reaction_type(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    result = {'type': value.get('@type')}
+    for key in ('emoji', 'custom_emoji_id', 'star_count'):
+        if key in value:
+            result[key] = value[key]
+    return result
+
+
+def _available_reaction(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    return {
+        'reaction': _reaction_type(value.get('type')),
+        'needs_premium': value.get('needs_premium'),
+    }
+
+
 def _interaction(value: Optional[dict]) -> Optional[dict]:
     if not value:
         return None
@@ -168,9 +187,7 @@ def _interaction(value: Optional[dict]) -> Optional[dict]:
     if reactions:
         result['reactions'] = [
             {
-                'type': (item.get('type') or {}).get('@type'),
-                'emoji': (item.get('type') or {}).get('emoji'),
-                'custom_emoji_id': (item.get('type') or {}).get('custom_emoji_id'),
+                **(_reaction_type(item.get('type')) or {}),
                 'total_count': item.get('total_count'),
                 'is_chosen': item.get('is_chosen'),
             }
@@ -248,6 +265,48 @@ def message(
 
 def file(value: Optional[dict]) -> Optional[dict]:
     return _file(value)
+
+
+def available_reactions(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    unavailability_reason = value.get('unavailability_reason') or {}
+    return {
+        'top_reactions': [
+            _available_reaction(item) for item in value.get('top_reactions', [])
+        ],
+        'recent_reactions': [
+            _available_reaction(item) for item in value.get('recent_reactions', [])
+        ],
+        'popular_reactions': [
+            _available_reaction(item) for item in value.get('popular_reactions', [])
+        ],
+        'allow_custom_emoji': value.get('allow_custom_emoji'),
+        'are_tags': value.get('are_tags'),
+        'unavailability_reason': (
+            {'type': unavailability_reason.get('@type')}
+            if unavailability_reason
+            else None
+        ),
+    }
+
+
+def added_reactions(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    return {
+        'total_count': value.get('total_count'),
+        'reactions': [
+            {
+                'reaction': _reaction_type(item.get('type')),
+                'sender': _sender(item.get('sender_id')),
+                'is_outgoing': item.get('is_outgoing'),
+                'date': item.get('date'),
+            }
+            for item in value.get('reactions', [])
+        ],
+        'next_offset': value.get('next_offset', ''),
+    }
 
 
 def transcription_request(value: Optional[dict]) -> Optional[dict]:

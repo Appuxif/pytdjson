@@ -448,6 +448,7 @@ class API(BaseAPI):
         from_background: bool = None,
         send_date: int = None,
         message_thread_id: Optional[int] = None,
+        forum_topic_id: Optional[int] = None,
     ):
         """Sends a message to a chat.
         The chat must be in the tdlib's database.
@@ -455,8 +456,13 @@ class API(BaseAPI):
         Chat is being saved to the database when the client
         receives a message or when you call the `get_chats` method.
 
-        message_thread_id - не используется, оставлено для обратной совместимости
+        message_thread_id identifies a topic in a non-forum supergroup.
+        forum_topic_id identifies a topic in a forum supergroup.
         """
+        if message_thread_id is not None and forum_topic_id is not None:
+            raise ValueError(
+                'message_thread_id and forum_topic_id cannot be used together'
+            )
         formatted_text = {'@type': 'formattedText', 'text': text}
 
         if parse_mode is not None and parse_mode is not TextParseMode.NONE:
@@ -484,10 +490,22 @@ class API(BaseAPI):
                 'quote': None,
             }
 
+        topic_id: Optional[Dict[Any, Any]] = None
+        if message_thread_id is not None:
+            topic_id = {
+                '@type': 'messageTopicThread',
+                'message_thread_id': message_thread_id,
+            }
+        elif forum_topic_id is not None:
+            topic_id = {
+                '@type': 'messageTopicForum',
+                'forum_topic_id': forum_topic_id,
+            }
+
         return self.send_data(
             'sendMessage',
             chat_id=chat_id,
-            topic_id=None,
+            topic_id=topic_id,
             reply_to=reply_to,
             input_message_content=input_message_content,
             options=_get_send_message_options(

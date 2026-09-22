@@ -25,12 +25,13 @@ Launch tests
 
 ## MCP server
 
-`pytdjson-mcp` is an optional, read-only MCP server for local AI agents. It
+`pytdjson-mcp` is an optional MCP server for local AI agents. It
 uses the same TDLib session database as the Python wrapper. It supports stdio
 and Streamable HTTP transports, and exposes compact summaries for chats,
-messages, users (including batch user lookup), groups, links, and local statistics; it doesn't send messages
-or mark them as read. Forum-aware read tools list forum topics, read topic
-history, and read reply-thread history.
+messages, users (including batch user lookup), groups, links, local statistics,
+and an allowlisted `send_message` tool; it doesn't mark messages as read.
+Forum-aware tools list forum topics, read topic history, and read reply-thread
+history.
 
 Install it from a release tag with the optional extra:
 
@@ -50,6 +51,15 @@ run the MCP server with the same files directory:
 
 Configure an MCP host to launch that command over stdio. The server requires
 an existing authorized session; if it expires, run `login` again in a terminal.
+
+Message sending is disabled by default. To allow it for selected chats, add
+their numeric IDs to the private dotenv file:
+
+> PYTDJSON_ALLOW_SEND_TO_CHATS=-1001564852174,1043638331
+
+Set `PYTDJSON_ALLOW_SEND_TO_CHATS=*` only when sending to every chat is
+intentional. The `send_message` tool supports ordinary messages, replies,
+non-forum message threads, and forum topics.
 
 For one shared local TDLib session used by multiple MCP clients, run the
 Streamable HTTP transport in a persistent terminal or service:

@@ -3,7 +3,7 @@ import logging
 import signal
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import FrameType
 from typing import Any, Callable, Coroutine, DefaultDict, Dict, List, Optional
 from uuid import uuid4
@@ -67,6 +67,8 @@ class Settings:
         # независимо от handlers_worker_tasks
         5
     )
+    mcp_allowed_send_to_chats: frozenset[int] = field(default_factory=frozenset)
+    mcp_allow_send_to_all_chats: bool = False
 
     def __post_init__(self):
 

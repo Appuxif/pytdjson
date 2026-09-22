@@ -21,6 +21,51 @@ class ConfigurationTestCase(TestCase):
         self.assertEqual(42, settings.api_id)
         self.assertEqual('token', settings.bot_token)
 
+    def test_parses_send_message_allowlist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                    'PYTDJSON_ALLOW_SEND_TO_CHATS': ' 123, -456, 123 ',
+                }
+            )
+
+        self.assertEqual(frozenset({123, -456}), settings.mcp_allowed_send_to_chats)
+        self.assertFalse(settings.mcp_allow_send_to_all_chats)
+
+    def test_allows_explicit_wildcard_for_send_message(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                    'PYTDJSON_ALLOW_SEND_TO_CHATS': '*',
+                }
+            )
+
+        self.assertEqual(frozenset(), settings.mcp_allowed_send_to_chats)
+        self.assertTrue(settings.mcp_allow_send_to_all_chats)
+
+    def test_rejects_mixed_send_message_wildcard(self):
+        with self.assertRaises(ConfigurationError):
+            load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': tempfile.gettempdir(),
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                    'PYTDJSON_ALLOW_SEND_TO_CHATS': '*,123',
+                }
+            )
+
     def test_rejects_missing_secrets_without_echoing_values(self):
         with self.assertRaises(ConfigurationError) as error:
             load_settings(environ={'PYTDJSON_API_ID': '42'})

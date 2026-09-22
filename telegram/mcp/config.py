@@ -10,6 +10,37 @@ class ConfigurationError(ValueError):
     """Raised when MCP startup configuration is incomplete."""
 
 
+def _parse_send_allowlist(raw_value: Optional[str]) -> tuple[frozenset[int], bool]:
+    """Parse the fail-closed MCP message sending allowlist."""
+    value = (raw_value or '').strip()
+    if not value:
+        return frozenset(), False
+
+    entries = [entry.strip() for entry in value.split(',')]
+    if any(not entry for entry in entries):
+        raise ConfigurationError(
+            'PYTDJSON_ALLOW_SEND_TO_CHATS must contain comma-separated chat IDs'
+        )
+    if '*' in entries:
+        if entries != ['*']:
+            raise ConfigurationError(
+                'PYTDJSON_ALLOW_SEND_TO_CHATS must be either * or chat IDs, not both'
+            )
+        return frozenset(), True
+
+    try:
+        chat_ids = frozenset(int(entry) for entry in entries)
+    except ValueError as error:
+        raise ConfigurationError(
+            'PYTDJSON_ALLOW_SEND_TO_CHATS must contain integer chat IDs'
+        ) from error
+    if 0 in chat_ids:
+        raise ConfigurationError(
+            'PYTDJSON_ALLOW_SEND_TO_CHATS cannot contain chat ID 0'
+        )
+    return chat_ids, False
+
+
 def load_settings(
     env_file: Optional[str] = None,
     environ: Optional[Mapping[str, str]] = None,
@@ -47,6 +78,9 @@ def load_settings(
 
     files_directory = Path(values['PYTDJSON_FILES_DIRECTORY']).expanduser()
     files_directory.mkdir(parents=True, exist_ok=True)
+    allowed_send_to_chats, allow_send_to_all_chats = _parse_send_allowlist(
+        values.get('PYTDJSON_ALLOW_SEND_TO_CHATS')
+    )
     return Settings(
         api_id=api_id,
         api_hash=values['PYTDJSON_API_HASH'],
@@ -56,4 +90,6 @@ def load_settings(
         bot_token=bot_token,
         library_path=values.get('PYTDJSON_LIBRARY_PATH') or None,
         tdlib_verbosity=int(values.get('PYTDJSON_TDLIB_VERBOSITY', '0')),
+        mcp_allowed_send_to_chats=allowed_send_to_chats,
+        mcp_allow_send_to_all_chats=allow_send_to_all_chats,
     )

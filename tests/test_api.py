@@ -118,3 +118,40 @@ class ApiTestCase(TestCase):
             },
             self.client.query,
         )
+
+    def test_send_message_uses_forum_topic(self):
+        self.api.send_message(
+            1,
+            'hello',
+            forum_topic_id=84427,
+            reply_to_message_id=99,
+        )
+
+        self.assertEqual(
+            {
+                '@type': 'sendMessage',
+                'chat_id': 1,
+                'topic_id': {
+                    '@type': 'messageTopicForum',
+                    'forum_topic_id': 84427,
+                },
+                'reply_to': {
+                    '@type': 'inputMessageReplyToMessage',
+                    'checklist_task_id': 0,
+                    'poll_option_id': '',
+                    'message_id': 99,
+                    'quote': None,
+                },
+                'input_message_content': {
+                    '@type': 'inputMessageText',
+                    'text': {'@type': 'formattedText', 'text': 'hello'},
+                    'link_preview_options': {
+                        '@type': 'linkPreviewOptions',
+                        'is_disabled': True,
+                    },
+                    'clear_draft': True,
+                },
+                'options': {},
+            },
+            self.client.query,
+        )

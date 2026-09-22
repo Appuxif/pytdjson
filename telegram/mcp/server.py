@@ -1,9 +1,10 @@
-"""Read-only MCP server exposing the supported pytdjson API."""
+"""MCP server exposing read tools and explicitly allowlisted write tools."""
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Annotated
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
@@ -12,8 +13,16 @@ from telegram.mcp import projection
 from telegram.mcp.runtime import TelegramRuntime
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True)
+SEND = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=True,
+)
 LIMIT = Annotated[int, Field(ge=1, le=100)]
 USER_IDS = Annotated[list[int], Field(min_length=1, max_length=200)]
+MESSAGE_TEXT = Annotated[str, Field(min_length=1, max_length=4096)]
+MESSAGE_ID = Annotated[int, Field(ge=1)]
 
 
 def create_server(
@@ -33,7 +42,9 @@ def create_server(
     mcp = MCPServer(
         'pytdjson-mcp',
         title='PyTDJson',
-        description='Read-only Telegram data through a local TDLib session.',
+        description=(
+            'Telegram data and allowlisted message sending through a local TDLib session.'
+        ),
         lifespan=lifespan,
     )
 
@@ -210,6 +221,45 @@ def create_server(
         """Get one message by chat and message ID."""
         return projection.message(
             await runtime.call('get_message', message_id, chat_id)
+        )
+
+    @mcp.tool(annotations=SEND)
+    async def send_message(
+        chat_id: int,
+        text: MESSAGE_TEXT,
+        message_thread_id: MESSAGE_ID | None = None,
+        forum_topic_id: MESSAGE_ID | None = None,
+        reply_to_message_id: MESSAGE_ID | None = None,
+    ) -> dict:
+        """Send a text message to an explicitly allowlisted chat.
+
+        Sending is disabled unless ``PYTDJSON_ALLOW_SEND_TO_CHATS`` contains
+        the chat ID or is set to ``*``. Use ``message_thread_id`` for a
+        non-forum reply thread and ``forum_topic_id`` for a forum topic.
+        """
+        if not text.strip():
+            raise ToolError('text must contain a non-whitespace character')
+        if (
+            not settings.mcp_allow_send_to_all_chats
+            and chat_id not in settings.mcp_allowed_send_to_chats
+        ):
+            raise ToolError(
+                f'sending messages to chat {chat_id} is not allowed; '
+                'configure PYTDJSON_ALLOW_SEND_TO_CHATS'
+            )
+        if message_thread_id is not None and forum_topic_id is not None:
+            raise ToolError(
+                'message_thread_id and forum_topic_id cannot be used together'
+            )
+        return projection.message(
+            await runtime.call(
+                'send_message',
+                chat_id,
+                text=text,
+                message_thread_id=message_thread_id,
+                forum_topic_id=forum_topic_id,
+                reply_to_message_id=reply_to_message_id,
+            )
         )
 
     @mcp.tool(annotations=READ_ONLY)

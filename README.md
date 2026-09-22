@@ -28,7 +28,7 @@ Launch tests
 `pytdjson-mcp` is an optional, read-only MCP server for local AI agents. It
 uses the same TDLib session database as the Python wrapper. It supports stdio
 and Streamable HTTP transports, and exposes compact summaries for chats,
-messages, users, groups, links, and local statistics; it doesn't send messages
+messages, users (including batch user lookup), groups, links, and local statistics; it doesn't send messages
 or mark them as read. Forum-aware read tools list forum topics, read topic
 history, and read reply-thread history.
 

@@ -13,6 +13,7 @@ from telegram.mcp.runtime import TelegramRuntime
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True)
 LIMIT = Annotated[int, Field(ge=1, le=100)]
+USER_IDS = Annotated[list[int], Field(min_length=1, max_length=200)]
 
 
 def create_server(
@@ -45,6 +46,23 @@ def create_server(
     async def get_user(user_id: int) -> dict:
         """Get a Telegram user by numeric ID."""
         return projection.user(await runtime.call('get_user', user_id))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_users(user_ids: USER_IDS) -> dict:
+        """Get multiple Telegram users in one MCP call.
+
+        Duplicate IDs are removed while preserving the input order. TDLib
+        exposes only getUser, so the individual lookups are performed in
+        parallel behind this batch tool.
+        """
+        unique_user_ids = list(dict.fromkeys(user_ids))
+        users = await asyncio.gather(
+            *(runtime.call('get_user', user_id) for user_id in unique_user_ids)
+        )
+        return {
+            'total_count': len(users),
+            'users': [projection.user(user) for user in users],
+        }
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_chat(chat_id: int) -> dict:

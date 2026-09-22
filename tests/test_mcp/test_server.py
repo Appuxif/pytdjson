@@ -8,6 +8,9 @@ from telegram.mcp.server import create_server
 
 
 class RuntimeStub:
+    def __init__(self):
+        self.calls = []
+
     async def start(self):
         pass
 
@@ -15,12 +18,21 @@ class RuntimeStub:
         pass
 
     async def call(self, method, *args, **kwargs):
+        self.calls.append((method, args, kwargs))
         if method == 'get_me':
             return {
                 'id': 42,
                 'first_name': 'Test',
                 'last_name': '',
                 'usernames': {'active_usernames': ['test_user']},
+                'type': {'@type': 'userTypeRegular'},
+            }
+        if method == 'get_user':
+            return {
+                'id': args[0],
+                'first_name': f'User {args[0]}',
+                'last_name': '',
+                'usernames': {'active_usernames': [f'user_{args[0]}']},
                 'type': {'@type': 'userTypeRegular'},
             }
         if method == 'get_chats':
@@ -57,7 +69,7 @@ class ServerTestCase(TestCase):
             )
             tools = asyncio.run(create_server(settings).list_tools())
 
-        self.assertEqual(20, len(tools))
+        self.assertEqual(21, len(tools))
         self.assertNotIn('view_messages', [tool.name for tool in tools])
         self.assertTrue(all(tool.annotations.read_only_hint for tool in tools))
         history = next(tool for tool in tools if tool.name == 'get_chat_history')
@@ -85,6 +97,32 @@ class ServerTestCase(TestCase):
         payload = json.loads(result.content[0].text)
         self.assertEqual(42, payload['id'])
         self.assertEqual('test_user', payload['username'])
+
+    def test_get_users_batches_and_deduplicates_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            result = asyncio.run(
+                create_server(settings, runtime).call_tool(
+                    'get_users', {'user_ids': [3, 2, 3]}
+                )
+            )
+
+        payload = json.loads(result.content[0].text)
+        self.assertEqual(2, payload['total_count'])
+        self.assertEqual([3, 2], [user['id'] for user in payload['users']])
+        self.assertEqual(
+            [3, 2],
+            [args[0] for method, args, _ in runtime.calls if method == 'get_user'],
+        )
 
     def test_get_chats_returns_compact_chat_objects(self):
         with tempfile.TemporaryDirectory() as directory:

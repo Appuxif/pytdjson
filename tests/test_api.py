@@ -56,6 +56,84 @@ class ApiTestCase(TestCase):
             self.client.query,
         )
 
+    def test_search_chats_uses_local_or_server_method(self):
+        self.api.search_chats('Darina', limit=7)
+        self.assertEqual(
+            {
+                '@type': 'searchChats',
+                'query': 'Darina',
+                'type_filter': None,
+                'limit': 7,
+            },
+            self.client.query,
+        )
+
+        self.api.search_chats('Darina', limit=7, on_server=True)
+        self.assertEqual('searchChatsOnServer', self.client.query['@type'])
+
+    def test_search_messages_builds_chat_and_global_requests(self):
+        self.api.search_chat_messages(
+            1,
+            query='hello',
+            topic_id=9,
+            sender_id=3,
+            from_message_id=8,
+            limit=20,
+            filter_type='searchMessagesFilterVoiceNote',
+        )
+        self.assertEqual(
+            {
+                '@type': 'searchChatMessages',
+                'chat_id': 1,
+                'topic_id': {
+                    '@type': 'messageTopicForum',
+                    'forum_topic_id': 9,
+                },
+                'query': 'hello',
+                'sender_id': {
+                    '@type': 'messageSenderUser',
+                    'user_id': 3,
+                },
+                'from_message_id': 8,
+                'offset': 0,
+                'limit': 20,
+                'filter': {'@type': 'searchMessagesFilterVoiceNote'},
+            },
+            self.client.query,
+        )
+
+        self.api.search_messages('hello', offset='next', chat_list=None)
+        self.assertEqual(
+            {
+                '@type': 'searchMessages',
+                'chat_list': None,
+                'query': 'hello',
+                'offset': 'next',
+                'limit': 100,
+                'filter': None,
+                'chat_type_filter': None,
+                'min_date': 0,
+                'max_date': 0,
+            },
+            self.client.query,
+        )
+
+    def test_file_methods_use_tdlib_file_requests(self):
+        self.api.get_file(4)
+        self.assertEqual({'@type': 'getFile', 'file_id': 4}, self.client.query)
+        self.api.download_file(4, priority=8, synchronous=True)
+        self.assertEqual(
+            {
+                '@type': 'downloadFile',
+                'file_id': 4,
+                'priority': 8,
+                'offset': 0,
+                'limit': 0,
+                'synchronous': True,
+            },
+            self.client.query,
+        )
+
     def test_forum_topic_history_uses_topic_and_message_pagination(self):
         self.api.get_forum_topic_history(
             1,

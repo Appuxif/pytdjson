@@ -127,6 +127,72 @@ class RuntimeTestCase(TestCase):
         self.assertEqual(2, buffer.size)
         self.assertEqual(1, buffer.oldest_cursor)
         self.assertEqual(3, buffer.next_sequence)
+        self.assertEqual(1, buffer.dropped_count)
+
+    def test_subscription_filters_event_types_and_topics(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(
+                frozenset({10}),
+                event_types={'updateNewMessage'},
+                topic_ids={7},
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateNewMessage',
+                    'message': {
+                        'id': 1,
+                        'chat_id': 10,
+                        'topic_id': {'@type': 'messageTopicForum', 'forum_topic_id': 7},
+                    },
+                }
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateNewMessage',
+                    'message': {
+                        'id': 2,
+                        'chat_id': 10,
+                        'topic_id': {'@type': 'messageTopicForum', 'forum_topic_id': 8},
+                    },
+                }
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateNewMessage',
+                    'message': {
+                        'id': 3,
+                        'chat_id': 10,
+                        'topic_id': {'@type': 'messageTopicForum', 'forum_topic_id': 7},
+                    },
+                }
+            )
+            return await runtime.poll_updates(timeout=0.01, limit=2)
+
+        updates, _, timed_out, _ = asyncio.run(exercise())
+        self.assertEqual([1, 3], [item['message']['id'] for item in updates])
+        self.assertFalse(timed_out)
+
+    def test_dropped_updates_are_reported_and_persisted(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            runtime._updates = _UpdateBuffer(maxlen=2)
+            await runtime.subscribe_for_updates(frozenset({10}))
+            for message_id in (1, 2, 3):
+                runtime._record_update(
+                    {
+                        '@type': 'updateNewMessage',
+                        'message': {'id': message_id, 'chat_id': 10},
+                    }
+                )
+            return runtime.update_subscription(), await runtime.poll_updates(
+                timeout=0.01, limit=1, cursor=0
+            )
+
+        state, result = asyncio.run(exercise())
+        self.assertEqual(1, state['dropped_count'])
+        self.assertTrue(result[3])
+        self.assertEqual(1, state['oldest_cursor'])
 
     def test_poll_updates_times_out_without_a_matching_event(self):
         async def exercise():
@@ -309,6 +375,33 @@ class RuntimeTestCase(TestCase):
         self.assertEqual(
             [{'chat_id': 10, 'message_id': 55}],
             state['pending_transcriptions'],
+        )
+
+    def test_subscription_filters_are_persisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = SimpleNamespace(files_directory=directory)
+            first = TelegramRuntime(settings)
+
+            async def populate():
+                await first.subscribe_for_updates(
+                    frozenset({10}),
+                    event_types={'updateMessageEdited'},
+                    topic_ids={7},
+                )
+
+            asyncio.run(populate())
+            restored = TelegramRuntime(settings)
+            state = restored.update_subscription()
+
+        self.assertEqual(
+            [
+                {
+                    'chat_id': 10,
+                    'event_types': ['updateMessageEdited'],
+                    'topic_ids': [7],
+                }
+            ],
+            state['subscriptions'],
         )
 
     def test_state_is_restored_from_the_client_data_directory(self):

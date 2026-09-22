@@ -43,6 +43,142 @@ def _reply_to(value: Optional[dict]) -> Optional[dict]:
     return result
 
 
+def _file(value: Optional[dict]) -> Optional[dict]:
+    """Return file metadata without exposing TDLib's internal object."""
+    if not value:
+        return None
+    local = value.get('local') or {}
+    remote = value.get('remote') or {}
+    return {
+        key: value.get(key) for key in ('id', 'size', 'expected_size') if key in value
+    } | {
+        'local': {
+            key: local.get(key)
+            for key in (
+                'path',
+                'can_be_downloaded',
+                'is_downloading_active',
+                'is_downloading_completed',
+                'download_offset',
+                'downloaded_prefix_size',
+                'downloaded_size',
+            )
+            if key in local
+        },
+        'remote': {
+            key: remote.get(key)
+            for key in (
+                'id',
+                'unique_id',
+                'is_uploading_active',
+                'is_uploading_completed',
+                'uploaded_size',
+            )
+            if key in remote
+        },
+    }
+
+
+def _media(value: dict) -> Optional[dict]:
+    """Project common media fields and file identifiers."""
+    content_type = value.get('@type')
+    media_key = {
+        'messageAnimation': 'animation',
+        'messageAudio': 'audio',
+        'messageDocument': 'document',
+        'messagePhoto': 'photo',
+        'messageVideo': 'video',
+        'messageVideoNote': 'video_note',
+        'messageVoiceNote': 'voice_note',
+    }.get(content_type)
+    if media_key is None:
+        return None
+    media = value.get(media_key) or {}
+    result = {'type': content_type}
+    result.update(
+        {
+            key: media.get(key)
+            for key in (
+                'duration',
+                'width',
+                'height',
+                'length',
+                'file_name',
+                'mime_type',
+                'performer',
+                'title',
+                'supports_streaming',
+            )
+            if key in media
+        }
+    )
+    if media.get('thumbnail'):
+        result['thumbnail'] = _file((media.get('thumbnail') or {}).get('file'))
+    if media.get('album_cover_thumbnail'):
+        result['album_cover_thumbnail'] = _file(
+            (media.get('album_cover_thumbnail') or {}).get('file')
+        )
+    if content_type == 'messagePhoto':
+        result['files'] = [
+            _file(item.get('photo'))
+            for item in media.get('sizes', [])
+            if _file(item.get('photo')) is not None
+        ]
+    else:
+        file_value = media.get(media_key)
+        if file_value is None:
+            file_value = media.get('file')
+        result['file'] = _file(file_value)
+    return result
+
+
+def _forward(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    origin = value.get('origin') or {}
+    result = {
+        'date': value.get('date'),
+        'source': value.get('source'),
+        'public_service_announcement_type': value.get(
+            'public_service_announcement_type'
+        ),
+        'origin': {'type': origin.get('@type')},
+    }
+    for key in (
+        'user_id',
+        'chat_id',
+        'message_id',
+        'sender_name',
+        'author_signature',
+    ):
+        if key in origin:
+            result['origin'][key] = origin[key]
+    return result
+
+
+def _interaction(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    result = {
+        key: value.get(key) for key in ('view_count', 'forward_count') if key in value
+    }
+    if value.get('reply_info') is not None:
+        result['reply_info'] = _reply_info(value.get('reply_info'))
+    reactions = value.get('reactions') or {}
+    if reactions:
+        result['reactions'] = [
+            {
+                'type': (item.get('type') or {}).get('@type'),
+                'emoji': (item.get('type') or {}).get('emoji'),
+                'custom_emoji_id': (item.get('type') or {}).get('custom_emoji_id'),
+                'total_count': item.get('total_count'),
+                'is_chosen': item.get('is_chosen'),
+            }
+            for item in reactions.get('reactions', [])
+        ]
+    return result
+
+
 def _transcript(content: dict) -> Optional[dict]:
     media_key = {
         'messageVoiceNote': 'voice_note',
@@ -67,7 +203,9 @@ def _transcript(content: dict) -> Optional[dict]:
     return None
 
 
-def message(value: Optional[dict]) -> Optional[dict]:
+def message(
+    value: Optional[dict], sender_details: Optional[dict] = None
+) -> Optional[dict]:
     if not value:
         return None
     content = value.get('content') or {}
@@ -77,7 +215,7 @@ def message(value: Optional[dict]) -> Optional[dict]:
     text_value = text.get('text') if isinstance(text, dict) else None
     if content.get('@type') == 'messageSticker' and text_value is None:
         text_value = sticker_emoji
-    return {
+    result = {
         'id': value.get('id'),
         'chat_id': value.get('chat_id'),
         'sender': _sender(value.get('sender_id') or value.get('sender')),
@@ -88,12 +226,28 @@ def message(value: Optional[dict]) -> Optional[dict]:
         'reply_to': _reply_to(value.get('reply_to')),
         'content_type': content.get('@type'),
         'text': text_value,
+        'entities': text.get('entities') if isinstance(text, dict) else None,
         'transcript': _transcript(content),
         'sticker_emoji': sticker_emoji,
         'sticker_id': sticker.get('id'),
         'sticker_set_id': sticker.get('set_id'),
         'sticker_is_premium': content.get('is_premium'),
+        'is_pinned': value.get('is_pinned'),
+        'is_channel_post': value.get('is_channel_post'),
+        'reply_info': _reply_info(value.get('interaction_info', {}).get('reply_info'))
+        if isinstance(value.get('interaction_info'), dict)
+        else None,
+        'interaction': _interaction(value.get('interaction_info')),
+        'forward': _forward(value.get('forward_info')),
+        'media': _media(content),
     }
+    if sender_details is not None:
+        result['sender_details'] = sender_details
+    return result
+
+
+def file(value: Optional[dict]) -> Optional[dict]:
+    return _file(value)
 
 
 def transcription_request(value: Optional[dict]) -> Optional[dict]:
@@ -250,7 +404,7 @@ def forum_topic(value: Optional[dict]) -> Optional[dict]:
 def forum_topics(value: dict) -> dict:
     return {
         'total_count': value.get('total_count'),
-        'topics': [forum_topic(item) for item in value.get('topics', [])],
+        'topics': [forum_topic(item) for item in (value.get('topics') or [])],
         'next_offset': {
             'date': value.get('next_offset_date'),
             'message_id': value.get('next_offset_message_id'),
@@ -282,14 +436,39 @@ def message_thread(value: Optional[dict]) -> Optional[dict]:
         'message_thread_id': value.get('message_thread_id'),
         'reply_info': _reply_info(value.get('reply_info')),
         'unread_message_count': value.get('unread_message_count'),
-        'messages': [message(item) for item in value.get('messages', [])],
+        'messages': [message(item) for item in (value.get('messages') or [])],
     }
 
 
-def history(value: dict) -> dict:
+def history(value: dict, sender_details: Optional[dict] = None) -> dict:
     return {
         'total_count': value.get('total_count'),
-        'messages': [message(item) for item in value.get('messages', [])],
+        'messages': [
+            message(
+                item,
+                (sender_details or {}).get(
+                    ((item.get('sender_id') or {}).get('user_id'))
+                ),
+            )
+            for item in (value.get('messages') or [])
+        ],
+    }
+
+
+def found_messages(value: dict, sender_details: Optional[dict] = None) -> dict:
+    return {
+        'total_count': value.get('total_count'),
+        'messages': [
+            message(
+                item,
+                (sender_details or {}).get(
+                    ((item.get('sender_id') or {}).get('user_id'))
+                ),
+            )
+            for item in (value.get('messages') or [])
+        ],
+        'next_offset': value.get('next_offset'),
+        'next_from_message_id': value.get('next_from_message_id'),
     }
 
 

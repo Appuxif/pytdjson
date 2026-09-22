@@ -18,6 +18,7 @@ class RuntimeStub:
         self.calls = []
         self.subscribed_chat_ids = set()
         self.poll_calls = []
+        self.subscription_kwargs = []
 
     async def start(self):
         pass
@@ -25,12 +26,14 @@ class RuntimeStub:
     async def stop(self):
         pass
 
-    async def subscribe_for_updates(self, chat_ids):
+    async def subscribe_for_updates(self, chat_ids, **kwargs):
+        self.subscription_kwargs.append(kwargs)
         added = chat_ids - self.subscribed_chat_ids
         self.subscribed_chat_ids.update(chat_ids)
         return {
             'subscribed_chat_ids': sorted(self.subscribed_chat_ids),
             'added_chat_ids': sorted(added),
+            'subscriptions': [],
         }
 
     async def unsubscribe_from_updates(self, chat_ids):
@@ -39,6 +42,7 @@ class RuntimeStub:
         return {
             'subscribed_chat_ids': sorted(self.subscribed_chat_ids),
             'removed_chat_ids': sorted(removed),
+            'subscriptions': [],
         }
 
     def update_subscription(self):
@@ -48,7 +52,12 @@ class RuntimeStub:
             'buffer_limit': 2000,
             'oldest_cursor': 0,
             'next_cursor': 0,
+            'dropped_count': 0,
+            'subscriptions': [],
         }
+
+    def has_more_updates(self, cursor):
+        return False
 
     async def poll_updates(self, timeout, limit=1, cursor=None):
         self.poll_calls.append((timeout, limit, cursor))
@@ -115,6 +124,106 @@ class RuntimeStub:
             }
         if method == 'get_chats':
             return {'total_count': 2, 'chat_ids': [10, 20]}
+        if method == 'search_chats':
+            return {'total_count': 1, 'chat_ids': [10]}
+        if method == 'search_chat_messages':
+            return {
+                'total_count': 1,
+                'messages': [
+                    {
+                        'id': 77,
+                        'chat_id': 10,
+                        'sender_id': {
+                            '@type': 'messageSenderUser',
+                            'user_id': 3,
+                        },
+                        'content': {
+                            '@type': 'messageText',
+                            'text': {'text': 'found'},
+                        },
+                    }
+                ],
+                'next_from_message_id': 66,
+            }
+        if method == 'search_messages':
+            return {
+                'total_count': 1,
+                'messages': [],
+                'next_offset': '',
+            }
+        if method == 'get_message':
+            message = {
+                'id': args[0],
+                'chat_id': args[1],
+                'sender_id': {
+                    '@type': 'messageSenderUser',
+                    'user_id': 3,
+                },
+                'content': {
+                    '@type': 'messageText',
+                    'text': {'text': 'target'},
+                },
+            }
+            if args[0] == 88:
+                message['topic_id'] = {
+                    '@type': 'messageTopicForum',
+                    'forum_topic_id': 7,
+                }
+            return message
+        if method == 'get_chat_history':
+            history_items = [
+                {
+                    'id': item_id,
+                    'chat_id': args[0],
+                    'sender_id': {
+                        '@type': 'messageSenderUser',
+                        'user_id': 3,
+                    },
+                    'content': {
+                        '@type': 'messageText',
+                        'text': {'text': 'context'},
+                    },
+                }
+                for item_id in (77, 76, 78)
+            ]
+            return {
+                'total_count': 2,
+                'messages': history_items,
+            }
+        if method == 'get_forum_topic_history':
+            return {
+                'total_count': 3,
+                'messages': [
+                    {
+                        'id': item_id,
+                        'chat_id': args[0],
+                        'topic_id': {
+                            '@type': 'messageTopicForum',
+                            'forum_topic_id': args[1],
+                        },
+                        'content': {
+                            '@type': 'messageText',
+                            'text': {'text': 'forum context'},
+                        },
+                    }
+                    for item_id in (88, 87, 89)
+                ],
+            }
+        if method == 'get_file':
+            return {
+                'id': 4,
+                'size': 10,
+                'expected_size': 10,
+                'local': {'path': '/tmp/file', 'is_downloading_completed': True},
+                'remote': {'id': 'remote-4'},
+            }
+        if method == 'download_file':
+            return {
+                'id': args[0],
+                'size': 10,
+                'local': {'path': '/tmp/file', 'is_downloading_completed': True},
+                'remote': {},
+            }
         if method == 'get_chat':
             return {
                 'id': args[0],
@@ -160,7 +269,7 @@ class ServerTestCase(TestCase):
             )
             tools = asyncio.run(create_server(settings).list_tools())
 
-        self.assertEqual(28, len(tools))
+        self.assertEqual(34, len(tools))
         tool_names = [tool.name for tool in tools]
         self.assertNotIn('view_messages', tool_names)
         self.assertIn('send_message', tool_names)
@@ -244,6 +353,38 @@ class ServerTestCase(TestCase):
         self.assertEqual([10, 20], subscribed_payload['subscribed_chat_ids'])
         self.assertEqual([10, 20], state_payload['subscribed_chat_ids'])
         self.assertEqual([20], unsubscribed_payload['subscribed_chat_ids'])
+
+    def test_subscribe_for_updates_accepts_event_and_topic_filters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            awaitable_call(
+                create_server(settings, runtime),
+                'subscribe_for_updates',
+                {
+                    'chat_ids': [10],
+                    'event_types': ['updateNewMessage', 'updateMessageEdited'],
+                    'topic_ids': [7],
+                },
+            )
+
+        self.assertEqual(
+            [
+                {
+                    'event_types': {'updateNewMessage', 'updateMessageEdited'},
+                    'topic_ids': {7},
+                }
+            ],
+            runtime.subscription_kwargs,
+        )
 
     def test_poll_updates_fails_immediately_without_subscription(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -340,6 +481,87 @@ class ServerTestCase(TestCase):
             [3, 2],
             [args[0] for method, args, _ in runtime.calls if method == 'get_user'],
         )
+
+    def test_search_messages_returns_cursor_and_caches_sender_details(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            server = create_server(settings, runtime)
+            first = awaitable_call(
+                server,
+                'search_messages',
+                {'query': 'found', 'chat_id': 10},
+            )
+            second = awaitable_call(
+                server,
+                'search_messages',
+                {'query': 'found', 'chat_id': 10},
+            )
+
+        first_payload = json.loads(first.content[0].text)
+        second_payload = json.loads(second.content[0].text)
+        self.assertEqual('{"from_message_id":66}', first_payload['next_cursor'])
+        self.assertEqual(
+            'User 3', first_payload['messages'][0]['sender_details']['first_name']
+        )
+        self.assertEqual(
+            1,
+            len([method for method, _, _ in runtime.calls if method == 'get_user']),
+        )
+        self.assertEqual(first_payload['messages'], second_payload['messages'])
+
+    def test_context_and_file_tools_return_compact_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            server = create_server(settings, runtime)
+            context = awaitable_call(
+                server,
+                'get_conversation_context',
+                {'chat_id': 10, 'message_id': 77, 'before': 1, 'after': 1},
+            )
+            forum_context = awaitable_call(
+                server,
+                'get_conversation_context',
+                {'chat_id': 10, 'message_id': 88, 'before': 1, 'after': 1},
+            )
+            file_result = awaitable_call(server, 'get_file', {'file_id': 4})
+
+        context_payload = json.loads(context.content[0].text)
+        file_payload = json.loads(file_result.content[0].text)
+        self.assertEqual(77, context_payload['message']['id'])
+        self.assertEqual(
+            [76, 77, 78], [item['id'] for item in context_payload['messages']]
+        )
+        self.assertEqual(1, context_payload['before_count'])
+        self.assertEqual(1, context_payload['after_count'])
+        forum_payload = json.loads(forum_context.content[0].text)
+        self.assertEqual(
+            [87, 88, 89], [item['id'] for item in forum_payload['messages']]
+        )
+        self.assertTrue(
+            all(
+                item['topic_id']['forum_topic_id'] == 7
+                for item in forum_payload['messages']
+            )
+        )
+        self.assertEqual('/tmp/file', file_payload['local']['path'])
 
     def test_send_message_is_denied_by_default(self):
         with tempfile.TemporaryDirectory() as directory:

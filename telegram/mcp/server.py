@@ -1,5 +1,6 @@
 """MCP server exposing read tools and explicitly allowlisted write tools."""
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -31,13 +32,71 @@ TRANSCRIPTION = ToolAnnotations(
     openWorldHint=True,
 )
 LIMIT = Annotated[int, Field(ge=1, le=100)]
+HISTORY_LIMIT = Annotated[int, Field(ge=1, le=500)]
+PAGE_LIMIT = Annotated[int, Field(ge=1, le=10)]
 USER_IDS = Annotated[list[int], Field(min_length=1, max_length=200)]
 CHAT_ID = Annotated[int, Field(ne=0)]
 CHAT_IDS = Annotated[list[CHAT_ID], Field(min_length=1, max_length=200)]
 POLL_TIMEOUT = Annotated[float, Field(gt=0, le=300)]
 CURSOR = Annotated[int, Field(ge=0)]
+TEXT_CURSOR = Annotated[str, Field(max_length=4096)]
 MESSAGE_TEXT = Annotated[str, Field(min_length=1, max_length=4096)]
 MESSAGE_ID = Annotated[int, Field(ge=1)]
+FILE_ID = Annotated[int, Field(ge=1)]
+EVENT_TYPES = Annotated[list[str], Field(min_length=1, max_length=50)]
+TOPIC_IDS = Annotated[list[int], Field(min_length=1, max_length=200)]
+
+MESSAGE_FILTERS = {
+    'all': None,
+    'animation': 'searchMessagesFilterAnimation',
+    'audio': 'searchMessagesFilterAudio',
+    'document': 'searchMessagesFilterDocument',
+    'photo': 'searchMessagesFilterPhoto',
+    'poll': 'searchMessagesFilterPoll',
+    'video': 'searchMessagesFilterVideo',
+    'voice_note': 'searchMessagesFilterVoiceNote',
+    'video_note': 'searchMessagesFilterVideoNote',
+    'voice_and_video_note': 'searchMessagesFilterVoiceAndVideoNote',
+    'photo_and_video': 'searchMessagesFilterPhotoAndVideo',
+    'url': 'searchMessagesFilterUrl',
+    'mention': 'searchMessagesFilterMention',
+    'unread_mention': 'searchMessagesFilterUnreadMention',
+    'unread_reaction': 'searchMessagesFilterUnreadReaction',
+    'unread_poll_vote': 'searchMessagesFilterUnreadPollVote',
+    'failed_to_send': 'searchMessagesFilterFailedToSend',
+    'pinned': 'searchMessagesFilterPinned',
+}
+
+
+def _search_filter(value: str | None) -> str | None:
+    if value is None or value == 'all':
+        return None
+    if value in MESSAGE_FILTERS:
+        return MESSAGE_FILTERS[value]
+    if value.startswith('searchMessagesFilter'):
+        return value
+    raise ToolError(
+        f'unknown message filter {value!r}; use one of '
+        + ', '.join(sorted(MESSAGE_FILTERS))
+    )
+
+
+def _chat_cursor(value: str) -> int:
+    if not value:
+        return 0
+    try:
+        parsed = json.loads(value)
+        if not isinstance(parsed, dict) or not isinstance(
+            parsed.get('from_message_id'), int
+        ):
+            raise ValueError
+        return parsed['from_message_id']
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise ToolError('invalid chat message search cursor') from error
+
+
+def _encode_chat_cursor(message_id: int) -> str:
+    return json.dumps({'from_message_id': message_id}, separators=(',', ':'))
 
 
 def create_server(
@@ -62,6 +121,39 @@ def create_server(
         ),
         lifespan=lifespan,
     )
+
+    sender_cache: dict[int, dict] = {}
+
+    async def _sender_details(messages: list[dict]) -> dict[int, dict]:
+        user_ids = {
+            (item.get('sender_id') or {}).get('user_id')
+            for item in messages
+            if (item.get('sender_id') or {}).get('user_id') is not None
+        }
+        missing = [user_id for user_id in user_ids if user_id not in sender_cache]
+        if missing:
+            users = await asyncio.gather(
+                *(runtime.call('get_user', user_id) for user_id in sorted(missing))
+            )
+            sender_cache.update(
+                {
+                    user_id: projection.user(user)
+                    for user_id, user in zip(sorted(missing), users)
+                }
+            )
+        return {user_id: sender_cache[user_id] for user_id in user_ids}
+
+    async def _project_messages(
+        messages: list[dict], include_sender_details: bool
+    ) -> list[dict]:
+        details = await _sender_details(messages) if include_sender_details else {}
+        return [
+            projection.message(
+                item,
+                details.get((item.get('sender_id') or {}).get('user_id')),
+            )
+            for item in messages
+        ]
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_me() -> dict:
@@ -118,10 +210,54 @@ def create_server(
         await runtime.call('load_chats', limit=limit, chat_list=chat_list)
         return {'loaded': True}
 
+    @mcp.tool(annotations=READ_ONLY)
+    async def search_chats(
+        query: str,
+        limit: LIMIT = 50,
+        on_server: bool = False,
+    ) -> dict:
+        """Find chats by title or username.
+
+        The default search is fast and uses TDLib's local cache. Set
+        ``on_server`` for public-chat discovery beyond the local cache.
+        """
+        result = await runtime.call(
+            'search_chats', query=query, limit=limit, on_server=on_server
+        )
+        chats = await asyncio.gather(
+            *(
+                runtime.call('get_chat', chat_id)
+                for chat_id in result.get('chat_ids', [])
+            )
+        )
+        return {
+            'total_count': result.get('total_count'),
+            'query': query,
+            'on_server': on_server,
+            'chats': [
+                projection.chat(chat, include_last_message=False) for chat in chats
+            ],
+        }
+
     @mcp.tool(annotations=SUBSCRIPTION)
-    async def subscribe_for_updates(chat_ids: CHAT_IDS) -> dict:
-        """Subscribe to live updates associated with the given chat IDs."""
-        return await runtime.subscribe_for_updates(frozenset(chat_ids))
+    async def subscribe_for_updates(
+        chat_ids: CHAT_IDS,
+        event_types: EVENT_TYPES | None = None,
+        topic_ids: TOPIC_IDS | None = None,
+    ) -> dict:
+        """Subscribe to selected live updates from the given chats.
+
+        By default only new messages and completed asynchronous transcription
+        results are collected. Event type names are TDLib update constructor
+        names, for example ``updateMessageEdited``. Topic IDs filter messages
+        to native forum/message topics; an empty topic filter accepts all.
+        """
+        kwargs = {}
+        if event_types is not None:
+            kwargs['event_types'] = set(event_types)
+        if topic_ids is not None:
+            kwargs['topic_ids'] = set(topic_ids)
+        return await runtime.subscribe_for_updates(frozenset(chat_ids), **kwargs)
 
     @mcp.tool(annotations=SUBSCRIPTION)
     async def unsubscribe_from_updates(chat_ids: CHAT_IDS) -> dict:
@@ -130,7 +266,7 @@ def create_server(
 
     @mcp.tool(annotations=READ_ONLY)
     async def check_updates_subscription() -> dict:
-        """Show active update subscriptions and bounded buffer state."""
+        """Show active update filters and bounded buffer state."""
         return runtime.update_subscription()
 
     @mcp.tool(annotations=READ_ONLY)
@@ -159,6 +295,14 @@ def create_server(
         )
         state = runtime.update_subscription()
         projected_updates = [projection.update(update) for update in updates]
+        dropped_updates = 0
+        if cursor is not None and cursor < state['oldest_cursor']:
+            dropped_updates = state['oldest_cursor'] - cursor
+        has_more = (
+            runtime.has_more_updates(next_cursor)
+            if hasattr(runtime, 'has_more_updates')
+            else False
+        )
         return {
             # Keep the singular field for clients written before batching was
             # added. New clients should consume `updates`.
@@ -166,8 +310,11 @@ def create_server(
             'updates': projected_updates,
             'timed_out': timed_out,
             'cursor_expired': cursor_expired,
+            'dropped_updates': dropped_updates,
+            'has_more': has_more,
             'next_cursor': next_cursor,
             'subscribed_chat_ids': state['subscribed_chat_ids'],
+            'subscriptions': state.get('subscriptions', []),
         }
 
     @mcp.tool(annotations=SUBSCRIPTION)
@@ -185,6 +332,7 @@ def create_server(
         from_message_id: int = 0,
         offset: int = 0,
         only_local: bool = False,
+        include_sender_details: bool = False,
     ) -> dict:
         """Get a compact page of messages from one chat.
 
@@ -202,7 +350,242 @@ def create_server(
             offset=offset,
             only_local=only_local,
         )
-        return projection.history(result)
+        return {
+            **projection.history(
+                result,
+                await _sender_details(result.get('messages') or [])
+                if include_sender_details
+                else None,
+            ),
+            'oldest_message_id': min(
+                (item.get('id') for item in (result.get('messages') or [])),
+                default=0,
+            ),
+        }
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_chat_history_complete(
+        chat_id: int,
+        limit: HISTORY_LIMIT = 100,
+        max_pages: PAGE_LIMIT = 5,
+        only_local: bool = False,
+        include_sender_details: bool = True,
+    ) -> dict:
+        """Read up to ``limit`` recent messages with automatic pagination.
+
+        TDLib can return short pages while it fills a local history gap. This
+        helper retries and advances through older messages until the requested
+        amount is available, the history ends, or ``max_pages`` is reached.
+        """
+        messages_by_id: dict[int, dict] = {}
+        from_message_id = 0
+        pages_fetched = 0
+        stalled = False
+        while len(messages_by_id) < limit and pages_fetched < max_pages:
+            page_limit = min(100, limit - len(messages_by_id))
+            result = await runtime.call(
+                'get_chat_history',
+                chat_id,
+                limit=page_limit,
+                from_message_id=from_message_id,
+                offset=0,
+                only_local=only_local,
+            )
+            pages_fetched += 1
+            page = result.get('messages') or []
+            before_count = len(messages_by_id)
+            for item in page:
+                if item.get('id') is not None:
+                    messages_by_id[item['id']] = item
+            if not page:
+                break
+            oldest_message_id = min(
+                (item.get('id') for item in page if item.get('id') is not None),
+                default=0,
+            )
+            if not oldest_message_id or (
+                len(messages_by_id) == before_count
+                and oldest_message_id == from_message_id
+            ):
+                stalled = True
+                break
+            from_message_id = oldest_message_id
+        messages = sorted(
+            messages_by_id.values(), key=lambda item: item.get('id', 0), reverse=True
+        )[:limit]
+        return {
+            'total_count': result.get('total_count') if 'result' in locals() else 0,
+            'messages': await _project_messages(messages, include_sender_details),
+            'oldest_message_id': min((item.get('id') for item in messages), default=0),
+            'pages_fetched': pages_fetched,
+            'complete': len(messages) >= limit or not messages or stalled,
+            'max_pages_reached': pages_fetched >= max_pages
+            and len(messages) < limit
+            and not stalled,
+        }
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def search_messages(
+        query: str,
+        chat_id: int | None = None,
+        sender_id: int | None = None,
+        topic_id: int | None = None,
+        min_date: int = 0,
+        max_date: int = 0,
+        limit: LIMIT = 100,
+        cursor: TEXT_CURSOR = '',
+        chat_list: str | None = 'chatListMain',
+        filter: str = 'all',
+        include_sender_details: bool = True,
+    ) -> dict:
+        """Search text and media messages in one chat or across all chats.
+
+        Pass the returned ``next_cursor`` unchanged to continue. Chat-scoped
+        cursors are opaque JSON values; global cursors are supplied by TDLib.
+        ``topic_id`` is a native forum topic ID when ``chat_id`` is set.
+        """
+        filter_type = _search_filter(filter)
+        if chat_id is not None:
+            result = await runtime.call(
+                'search_chat_messages',
+                chat_id,
+                query=query,
+                topic_id=topic_id,
+                sender_id=sender_id,
+                from_message_id=_chat_cursor(cursor),
+                offset=0,
+                limit=limit,
+                filter_type=filter_type,
+            )
+            next_from_message_id = result.get('next_from_message_id', 0)
+            next_cursor = (
+                _encode_chat_cursor(next_from_message_id)
+                if next_from_message_id
+                else ''
+            )
+        else:
+            result = await runtime.call(
+                'search_messages',
+                query=query,
+                offset=cursor,
+                limit=limit,
+                chat_list=chat_list,
+                filter_type=filter_type,
+                min_date=min_date,
+                max_date=max_date,
+            )
+            next_cursor = result.get('next_offset', '')
+        details = (
+            await _sender_details(result.get('messages') or [])
+            if include_sender_details
+            else {}
+        )
+        return {
+            'query': query,
+            'chat_id': chat_id,
+            'total_count': result.get('total_count'),
+            'messages': [
+                projection.message(
+                    item,
+                    details.get((item.get('sender_id') or {}).get('user_id')),
+                )
+                for item in (result.get('messages') or [])
+            ],
+            'next_cursor': next_cursor,
+            'has_more': bool(next_cursor),
+        }
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_conversation_context(
+        chat_id: int,
+        message_id: MESSAGE_ID,
+        before: Annotated[int, Field(ge=0, le=50)] = 10,
+        after: Annotated[int, Field(ge=0, le=50)] = 10,
+        include_sender_details: bool = True,
+    ) -> dict:
+        """Return a message with nearby messages and thread metadata."""
+        target = await runtime.call('get_message', message_id, chat_id)
+        target_topic = target.get('topic_id') or {}
+        forum_topic_id = target_topic.get('forum_topic_id')
+        history_method = (
+            'get_forum_topic_history'
+            if forum_topic_id is not None
+            else 'get_chat_history'
+        )
+        if forum_topic_id is not None:
+            history_args = (chat_id, forum_topic_id)
+            history_kwargs = {}
+        else:
+            history_args = (chat_id,)
+            history_kwargs = {'only_local': False}
+        requests = [
+            runtime.call(
+                history_method,
+                *history_args,
+                limit=before + 1,
+                from_message_id=message_id,
+                offset=0,
+                **history_kwargs,
+            )
+        ]
+        if after:
+            requests.append(
+                runtime.call(
+                    history_method,
+                    *history_args,
+                    limit=after + 1,
+                    from_message_id=message_id,
+                    offset=-after,
+                    **history_kwargs,
+                )
+            )
+        pages = await asyncio.gather(*requests)
+        messages_by_id = {message_id: target}
+        for page in pages:
+            for item in page.get('messages') or []:
+                if item.get('id') is not None:
+                    item_topic = item.get('topic_id') or {}
+                    if forum_topic_id is not None and (
+                        item_topic.get('forum_topic_id') != forum_topic_id
+                    ):
+                        continue
+                    messages_by_id[item['id']] = item
+        messages = sorted(messages_by_id.values(), key=lambda item: item.get('id', 0))
+        center_index = next(
+            (
+                index
+                for index, item in enumerate(messages)
+                if item.get('id') == message_id
+            ),
+            0,
+        )
+        window_start = max(0, center_index - before)
+        window_end = min(len(messages), center_index + after + 1)
+        messages = messages[window_start:window_end]
+        details = await _sender_details(messages) if include_sender_details else {}
+        projected = [
+            projection.message(
+                item,
+                details.get((item.get('sender_id') or {}).get('user_id')),
+            )
+            for item in messages
+        ]
+        target_index = next(
+            (index for index, item in enumerate(projected) if item['id'] == message_id),
+            0,
+        )
+        target_projection = projected[target_index]
+        return {
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'message': target_projection,
+            'messages': projected,
+            'target_index': target_index,
+            'before_count': target_index,
+            'after_count': len(projected) - target_index - 1,
+            'topic_id': target_projection.get('topic_id'),
+            'reply_to': target_projection.get('reply_to'),
+        }
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_forum_topics(
@@ -297,6 +680,35 @@ def create_server(
         return projection.message(
             await runtime.call('get_message', message_id, chat_id)
         )
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_file(file_id: FILE_ID) -> dict:
+        """Get local and remote metadata for a Telegram file."""
+        return projection.file(await runtime.call('get_file', file_id))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def download_file(
+        file_id: FILE_ID,
+        priority: Annotated[int, Field(ge=1, le=32)] = 16,
+        offset: Annotated[int, Field(ge=0)] = 0,
+        limit: Annotated[int, Field(ge=0)] = 0,
+        synchronous: bool = False,
+    ) -> dict:
+        """Start a media download and return its current local path/state.
+
+        With ``synchronous=true`` TDLib waits for completion, which can take a
+        long time. The default starts the download and lets the local file
+        state be checked with ``get_file``.
+        """
+        result = await runtime.call(
+            'download_file',
+            file_id,
+            priority=priority,
+            offset=offset,
+            limit=limit,
+            synchronous=synchronous,
+        )
+        return projection.file(result)
 
     @mcp.tool(annotations=TRANSCRIPTION)
     async def request_message_transcript(chat_id: int, message_id: MESSAGE_ID) -> dict:

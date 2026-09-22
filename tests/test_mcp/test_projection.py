@@ -76,6 +76,53 @@ class ProjectionTestCase(TestCase):
         self.assertTrue(result['sticker_is_premium'])
         self.assertNotIn('sticker', result)
 
+    def test_message_exposes_compact_media_interaction_and_entities(self):
+        result = projection.message(
+            {
+                'id': 2,
+                'chat_id': 1,
+                'interaction_info': {
+                    'view_count': 4,
+                    'forward_count': 2,
+                    'reply_info': {'reply_count': 3, 'last_message_id': 9},
+                    'reactions': {
+                        'reactions': [
+                            {
+                                'type': {'@type': 'reactionTypeEmoji', 'emoji': '👍'},
+                                'total_count': 2,
+                                'is_chosen': True,
+                            }
+                        ]
+                    },
+                },
+                'content': {
+                    '@type': 'messageAudio',
+                    'caption': {
+                        'text': 'voice',
+                        'entities': [{'@type': 'textEntityTypeBold'}],
+                    },
+                    'audio': {
+                        'duration': 4,
+                        'mime_type': 'audio/ogg',
+                        'file_name': 'voice.ogg',
+                        'audio': {
+                            'id': 17,
+                            'size': 8,
+                            'local': {'path': '/tmp/voice.ogg'},
+                            'remote': {'id': 'remote-17'},
+                        },
+                    },
+                },
+            }
+        )
+
+        self.assertEqual('voice', result['text'])
+        self.assertEqual('audio/ogg', result['media']['mime_type'])
+        self.assertEqual(17, result['media']['file']['id'])
+        self.assertEqual([{'@type': 'textEntityTypeBold'}], result['entities'])
+        self.assertEqual(4, result['interaction']['view_count'])
+        self.assertEqual('👍', result['interaction']['reactions'][0]['emoji'])
+
     def test_message_transcription_update_keeps_original_message_metadata(self):
         result = projection.update(
             {

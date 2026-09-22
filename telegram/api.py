@@ -190,6 +190,81 @@ class API(BaseAPI):
             chat_list={'@type': chat_list},
         )
 
+    def search_chats(
+        self,
+        query: str,
+        limit: int = 50,
+        on_server: bool = False,
+        type_filter: Optional[str] = None,
+    ):
+        """Search known chats, or public chats on Telegram's servers."""
+        return self.send_data(
+            'searchChatsOnServer' if on_server else 'searchChats',
+            query=query,
+            type_filter=({'@type': type_filter} if type_filter is not None else None),
+            limit=limit,
+        )
+
+    def search_chat_messages(
+        self,
+        chat_id: int,
+        query: str = '',
+        topic_id: Optional[int] = None,
+        sender_id: Optional[int] = None,
+        from_message_id: int = 0,
+        offset: int = 0,
+        limit: int = 100,
+        filter_type: Optional[str] = None,
+    ):
+        """Search messages in one chat, optionally scoped to a topic/sender."""
+        topic = (
+            {'@type': 'messageTopicForum', 'forum_topic_id': topic_id}
+            if topic_id is not None
+            else None
+        )
+        sender = (
+            {'@type': 'messageSenderUser', 'user_id': sender_id}
+            if sender_id is not None
+            else None
+        )
+        return self.send_data(
+            'searchChatMessages',
+            chat_id=chat_id,
+            topic_id=topic,
+            query=query,
+            sender_id=sender,
+            from_message_id=from_message_id,
+            offset=offset,
+            limit=limit,
+            filter=({'@type': filter_type} if filter_type is not None else None),
+        )
+
+    def search_messages(
+        self,
+        query: str,
+        offset: str = '',
+        limit: int = 100,
+        chat_list: Optional[str] = 'chatListMain',
+        filter_type: Optional[str] = None,
+        chat_type_filter: Optional[str] = None,
+        min_date: int = 0,
+        max_date: int = 0,
+    ):
+        """Search messages across chats."""
+        return self.send_data(
+            'searchMessages',
+            chat_list=({'@type': chat_list} if chat_list is not None else None),
+            query=query,
+            offset=offset,
+            limit=limit,
+            filter=({'@type': filter_type} if filter_type is not None else None),
+            chat_type_filter=(
+                {'@type': chat_type_filter} if chat_type_filter is not None else None
+            ),
+            min_date=min_date,
+            max_date=max_date,
+        )
+
     def get_chat_history(
         self,
         chat_id: int,
@@ -364,6 +439,28 @@ class API(BaseAPI):
             'getMessage',
             message_id=message_id,
             chat_id=chat_id,
+        )
+
+    def get_file(self, file_id: int):
+        """Get compact information about a TDLib file."""
+        return self.send_data('getFile', file_id=file_id)
+
+    def download_file(
+        self,
+        file_id: int,
+        priority: int = 16,
+        offset: int = 0,
+        limit: int = 0,
+        synchronous: bool = False,
+    ):
+        """Start or synchronously complete a file download."""
+        return self.send_data(
+            'downloadFile',
+            file_id=file_id,
+            priority=priority,
+            offset=offset,
+            limit=limit,
+            synchronous=synchronous,
         )
 
     def get_message_properties(self, chat_id: int, message_id: int):

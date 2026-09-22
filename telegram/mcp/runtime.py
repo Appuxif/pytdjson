@@ -16,13 +16,16 @@ class TelegramMCPError(RuntimeError):
 
 
 class _UpdateBuffer:
-    def __init__(self, maxlen: int = 2000) -> None:
+    def __init__(self, maxlen: int = 2000, dropped_count: int = 0) -> None:
         self.maxlen = maxlen
         self.events: Deque[tuple[int, dict]] = deque(maxlen=self.maxlen)
         self.next_sequence = 0
+        self.dropped_count = dropped_count
         self.waiters: set[asyncio.Future[None]] = set()
 
     def add(self, update: dict) -> int:
+        if len(self.events) >= self.maxlen:
+            self.dropped_count += 1
         self.next_sequence += 1
         self.events.append((self.next_sequence, update))
         for waiter in tuple(self.waiters):
@@ -79,13 +82,15 @@ class _UpdateBuffer:
 
     def matching(
         self,
-        chat_ids: frozenset[int],
+        subscriptions: dict[int, dict],
         after_sequence: int,
         limit: int,
     ) -> list[tuple[int, dict]]:
         matches = []
         for sequence, update in self.events:
-            if sequence > after_sequence and _update_chat_id(update) in chat_ids:
+            if sequence > after_sequence and _update_matches_subscription(
+                update, subscriptions
+            ):
                 matches.append((sequence, update))
                 if len(matches) >= limit:
                     break
@@ -117,6 +122,38 @@ def _update_message_id(update: dict) -> Optional[int]:
     if update.get('message_id') is not None:
         return update['message_id']
     return (update.get('message') or {}).get('id')
+
+
+def _update_topic_id(update: dict) -> Optional[int]:
+    message = update.get('message') or update.get('original_message') or {}
+    topic = message.get('topic_id') or {}
+    for key in (
+        'forum_topic_id',
+        'message_thread_id',
+        'direct_messages_chat_topic_id',
+        'saved_messages_topic_id',
+    ):
+        if topic.get(key) is not None:
+            return topic[key]
+    return None
+
+
+DEFAULT_UPDATE_EVENT_TYPES = frozenset({'updateNewMessage', 'mcpMessageTranscription'})
+
+
+def _update_matches_subscription(update: dict, subscriptions: dict[int, dict]) -> bool:
+    chat_id = _update_chat_id(update)
+    subscription = subscriptions.get(chat_id)
+    if subscription is None:
+        return False
+    if update.get('@type') == 'mcpMessageTranscription':
+        topic_ids = subscription.get('topic_ids') or set()
+        return not topic_ids or _update_topic_id(update) in topic_ids
+    event_types = subscription.get('event_types') or DEFAULT_UPDATE_EVENT_TYPES
+    if '*' not in event_types and update.get('@type') not in event_types:
+        return False
+    topic_ids = subscription.get('topic_ids') or set()
+    return not topic_ids or _update_topic_id(update) in topic_ids
 
 
 def _speech_recognition_result(content: Optional[dict]) -> Optional[dict]:
@@ -205,6 +242,20 @@ class _PersistentState:
                 );
                 """
             )
+            columns = {
+                row['name']
+                for row in self.connection.execute(
+                    'PRAGMA table_info(mcp_subscriptions)'
+                )
+            }
+            if 'event_types' not in columns:
+                self.connection.execute(
+                    "ALTER TABLE mcp_subscriptions ADD COLUMN event_types TEXT"
+                )
+            if 'topic_ids' not in columns:
+                self.connection.execute(
+                    "ALTER TABLE mcp_subscriptions ADD COLUMN topic_ids TEXT"
+                )
             self.connection.commit()
             if self.path:
                 os.chmod(self.path, 0o600)
@@ -228,10 +279,20 @@ class _PersistentState:
 
     def load(self, maxlen: int) -> dict:
         try:
-            subscriptions = {
-                row['chat_id']
+            subscription_rows = {
+                row['chat_id']: {
+                    'event_types': set(
+                        json.loads(row['event_types'])
+                        if row['event_types']
+                        else DEFAULT_UPDATE_EVENT_TYPES
+                    ),
+                    'topic_ids': set(
+                        json.loads(row['topic_ids']) if row['topic_ids'] else []
+                    ),
+                }
                 for row in self.connection.execute(
-                    'SELECT chat_id FROM mcp_subscriptions ORDER BY chat_id'
+                    'SELECT chat_id, event_types, topic_ids '
+                    'FROM mcp_subscriptions ORDER BY chat_id'
                 )
             }
             rows = list(
@@ -271,9 +332,11 @@ class _PersistentState:
                     }
                 )
             return {
-                'subscribed_chat_ids': subscriptions,
+                'subscribed_chat_ids': set(subscription_rows),
+                'subscriptions': subscription_rows,
                 'events': events,
                 'next_sequence': self._metadata_int('next_sequence'),
+                'dropped_count': self._metadata_int('dropped_count'),
                 'ignored_message_ids': ignored_message_ids,
                 'ignored_next_sequence': self._metadata_int('ignored_next_sequence'),
                 'transcription_requests': transcription_requests,
@@ -281,18 +344,32 @@ class _PersistentState:
         except (TypeError, ValueError, json.JSONDecodeError, sqlite3.Error) as error:
             raise TelegramMCPError('cannot load MCP state database') from error
 
-    def save_subscriptions(self, chat_ids: set[int]) -> None:
+    def save_subscriptions(self, subscriptions: dict[int, dict]) -> None:
         try:
             with self.connection:
                 self.connection.execute('DELETE FROM mcp_subscriptions')
                 self.connection.executemany(
-                    'INSERT INTO mcp_subscriptions(chat_id) VALUES (?)',
-                    ((chat_id,) for chat_id in sorted(chat_ids)),
+                    'INSERT INTO mcp_subscriptions(chat_id, event_types, topic_ids) '
+                    'VALUES (?, ?, ?)',
+                    (
+                        (
+                            chat_id,
+                            json.dumps(sorted(item.get('event_types') or [])),
+                            json.dumps(sorted(item.get('topic_ids') or [])),
+                        )
+                        for chat_id, item in sorted(subscriptions.items())
+                    ),
                 )
         except sqlite3.Error as error:
             raise TelegramMCPError('cannot persist MCP subscriptions') from error
 
-    def add_update(self, sequence: int, update: dict, maxlen: int) -> None:
+    def add_update(
+        self,
+        sequence: int,
+        update: dict,
+        maxlen: int,
+        dropped_count: Optional[int] = None,
+    ) -> None:
         try:
             with self.connection:
                 self.connection.execute(
@@ -301,6 +378,8 @@ class _PersistentState:
                     (sequence, json.dumps(update, ensure_ascii=False)),
                 )
                 self._set_metadata('next_sequence', sequence)
+                if dropped_count is not None:
+                    self._set_metadata('dropped_count', dropped_count)
                 self.connection.execute(
                     'DELETE FROM mcp_updates WHERE sequence <= ?',
                     (sequence - maxlen,),
@@ -401,6 +480,7 @@ class TelegramRuntime:
         self._state = _PersistentState(getattr(settings, 'files_directory', None))
         self._updates = _UpdateBuffer()
         self._subscribed_chat_ids: set[int] = set()
+        self._subscriptions: dict[int, dict] = {}
         self._ignored_message_ids: set[int] = set()
         self._ignored_message_order: Deque[int] = deque()
         self._ignored_next_sequence = 0
@@ -412,7 +492,26 @@ class TelegramRuntime:
         self._subscribed_chat_ids = set(state['subscribed_chat_ids'])
         self._updates = _UpdateBuffer()
         self._updates.next_sequence = state['next_sequence']
+        self._updates.dropped_count = state.get('dropped_count', 0)
         self._updates.events.extend(state['events'][-self._updates.maxlen :])
+        self._subscriptions = {
+            chat_id: {
+                'event_types': set(
+                    item.get('event_types') or DEFAULT_UPDATE_EVENT_TYPES
+                ),
+                'topic_ids': set(item.get('topic_ids') or set()),
+            }
+            for chat_id, item in state.get('subscriptions', {}).items()
+        }
+        if not self._subscriptions:
+            self._subscriptions = {
+                chat_id: {
+                    'event_types': set(DEFAULT_UPDATE_EVENT_TYPES),
+                    'topic_ids': set(),
+                }
+                for chat_id in state['subscribed_chat_ids']
+            }
+        self._subscribed_chat_ids = set(self._subscriptions)
         self._ignored_message_order = deque(state['ignored_message_ids'])
         self._ignored_message_ids = set(self._ignored_message_order)
         self._ignored_next_sequence = state['ignored_next_sequence']
@@ -462,16 +561,18 @@ class TelegramRuntime:
         update_type = update.get('@type')
         if update_type == 'updateMessageContent':
             self._record_transcription_update(update)
+        if update_type == 'mcpMessageTranscription':
             return
-        if update_type != 'updateNewMessage':
+        if _update_message_id(update) in self._ignored_message_ids:
             return
-        chat_id = _update_chat_id(update)
-        if (
-            chat_id in self._subscribed_chat_ids
-            and _update_message_id(update) not in self._ignored_message_ids
-        ):
+        if _update_matches_subscription(update, self._subscriptions):
             sequence = self._updates.add(update)
-            self._state.add_update(sequence, update, self._updates.maxlen)
+            self._state.add_update(
+                sequence,
+                update,
+                self._updates.maxlen,
+                self._updates.dropped_count,
+            )
 
     def _record_transcription_update(self, update: dict) -> None:
         chat_id = _update_chat_id(update)
@@ -504,7 +605,12 @@ class TelegramRuntime:
         else:
             update['error'] = result.get('error') or {}
         sequence = self._updates.add(update)
-        self._state.add_update(sequence, update, self._updates.maxlen)
+        self._state.add_update(
+            sequence,
+            update,
+            self._updates.maxlen,
+            self._updates.dropped_count,
+        )
         self._transcription_requests.pop((chat_id, message_id), None)
         self._state.delete_transcription_request(chat_id, message_id)
 
@@ -538,18 +644,42 @@ class TelegramRuntime:
         removed = self._updates.remove_message(message_id)
         self._state.delete_updates(removed)
 
-    async def subscribe_for_updates(self, chat_ids: frozenset[int]) -> dict:
+    async def subscribe_for_updates(
+        self,
+        chat_ids: frozenset[int],
+        event_types: Optional[set[str]] = None,
+        topic_ids: Optional[set[int]] = None,
+    ) -> dict:
         added_chat_ids = chat_ids - self._subscribed_chat_ids
+        normalized_event_types = set(
+            DEFAULT_UPDATE_EVENT_TYPES if event_types is None else event_types
+        )
+        if not normalized_event_types:
+            raise ValueError('event_types must not be empty')
+        normalized_topic_ids = set(topic_ids or set())
         self._subscribed_chat_ids.update(chat_ids)
-        self._state.save_subscriptions(self._subscribed_chat_ids)
+        for chat_id in chat_ids:
+            if (
+                chat_id not in self._subscriptions
+                or event_types is not None
+                or topic_ids is not None
+            ):
+                self._subscriptions[chat_id] = {
+                    'event_types': normalized_event_types,
+                    'topic_ids': normalized_topic_ids,
+                }
+        self._state.save_subscriptions(self._subscriptions)
         return {
             'subscribed_chat_ids': sorted(self._subscribed_chat_ids),
             'added_chat_ids': sorted(added_chat_ids),
+            'subscriptions': self._subscription_payload(),
         }
 
     async def unsubscribe_from_updates(self, chat_ids: frozenset[int]) -> dict:
         removed_chat_ids = chat_ids & self._subscribed_chat_ids
         self._subscribed_chat_ids.difference_update(chat_ids)
+        for chat_id in removed_chat_ids:
+            self._subscriptions.pop(chat_id, None)
         removed_sequences = self._updates.remove_chats(chat_ids)
         self._state.delete_updates(removed_sequences)
         for request_chat_id, request_message_id in tuple(self._transcription_requests):
@@ -560,11 +690,22 @@ class TelegramRuntime:
                 self._state.delete_transcription_request(
                     request_chat_id, request_message_id
                 )
-        self._state.save_subscriptions(self._subscribed_chat_ids)
+        self._state.save_subscriptions(self._subscriptions)
         return {
             'subscribed_chat_ids': sorted(self._subscribed_chat_ids),
             'removed_chat_ids': sorted(removed_chat_ids),
+            'subscriptions': self._subscription_payload(),
         }
+
+    def _subscription_payload(self) -> list[dict]:
+        return [
+            {
+                'chat_id': chat_id,
+                'event_types': sorted(item.get('event_types') or []),
+                'topic_ids': sorted(item.get('topic_ids') or []),
+            }
+            for chat_id, item in sorted(self._subscriptions.items())
+        ]
 
     def update_subscription(self) -> dict:
         return {
@@ -573,6 +714,8 @@ class TelegramRuntime:
             'buffer_limit': self._updates.events.maxlen,
             'oldest_cursor': self._updates.oldest_cursor,
             'next_cursor': self._updates.next_sequence,
+            'dropped_count': self._updates.dropped_count,
+            'subscriptions': self._subscription_payload(),
             'pending_transcriptions': [
                 {'chat_id': chat_id, 'message_id': message_id}
                 for chat_id, message_id in sorted(self._transcription_requests)
@@ -596,14 +739,20 @@ class TelegramRuntime:
             self._updates.oldest_cursor if cursor is None else max(cursor, 0)
         )
         deadline = loop.time() + timeout
-        subscribed_chat_ids = frozenset(self._subscribed_chat_ids)
+        subscriptions = {
+            chat_id: {
+                'event_types': set(item.get('event_types') or []),
+                'topic_ids': set(item.get('topic_ids') or []),
+            }
+            for chat_id, item in self._subscriptions.items()
+        }
         cursor_expired = (
             cursor is not None and after_sequence < self._updates.oldest_cursor
         )
 
         while True:
             matches = self._updates.matching(
-                subscribed_chat_ids,
+                subscriptions,
                 after_sequence,
                 limit,
             )
@@ -627,6 +776,9 @@ class TelegramRuntime:
                 return [], self._updates.next_sequence, True, cursor_expired
             finally:
                 self._updates.waiters.discard(waiter)
+
+    def has_more_updates(self, cursor: int) -> bool:
+        return bool(self._updates.matching(self._subscriptions, max(cursor, 0), 1))
 
     async def request_message_transcript(self, chat_id: int, message_id: int) -> dict:
         """Start asynchronous TDLib speech recognition for one message."""

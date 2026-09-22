@@ -31,7 +31,8 @@ and Streamable HTTP transports, and exposes compact summaries for chats,
 messages, users (including batch user lookup), groups, links, local statistics,
 and an allowlisted `send_message` tool; it doesn't mark messages as read.
 Forum-aware tools list forum topics, read topic history, and read reply-thread
-history.
+history. Search and context tools reduce the number of pagination calls an
+agent needs to find and understand a conversation.
 
 Install it from a release tag with the optional extra:
 
@@ -70,8 +71,24 @@ buffered updates, cursors, and sent-message suppression IDs in its own
 `mcp_state.sqlite3` file alongside the TDLib data; it does not access TDLib's
 private database schema.
 `check_updates_subscription` shows active subscriptions and the bounded
-in-memory buffer. `unsubscribe_from_updates` stops collecting updates and
-removes buffered events for those chats.
+in-memory buffer. Subscriptions can optionally filter by TDLib update type and
+native topic ID; by default only new messages and transcription results are
+collected. `poll_updates` reports whether more matching updates are available
+and whether the bounded buffer dropped updates. `unsubscribe_from_updates`
+stops collecting updates and removes buffered events for those chats.
+
+Use `search_chats` to find known chats by title or username, optionally using
+a server-side public-chat search. `search_messages` searches within a chat or
+across chats and returns an opaque `next_cursor`; pass it unchanged to fetch
+the next page. `get_conversation_context` returns a message with nearby
+messages, reply metadata, and topic metadata. For recent chat history,
+`get_chat_history_complete` automatically retries short TDLib pages while the
+local message database is being populated.
+
+Message projections include compact text/entity, reply, forwarding,
+interaction, sticker, and media metadata. Media file IDs can be inspected
+with `get_file` and downloaded with `download_file`; file responses expose the
+local path and progress state without returning binary data through MCP.
 
 Voice messages and round video messages can be transcribed asynchronously.
 After receiving one through `poll_updates`, call

@@ -190,6 +190,81 @@ class API(BaseAPI):
             chat_list={'@type': chat_list},
         )
 
+    def search_chats(
+        self,
+        query: str,
+        limit: int = 50,
+        on_server: bool = False,
+        type_filter: Optional[str] = None,
+    ):
+        """Search known chats, or public chats on Telegram's servers."""
+        return self.send_data(
+            'searchChatsOnServer' if on_server else 'searchChats',
+            query=query,
+            type_filter=({'@type': type_filter} if type_filter is not None else None),
+            limit=limit,
+        )
+
+    def search_chat_messages(
+        self,
+        chat_id: int,
+        query: str = '',
+        topic_id: Optional[int] = None,
+        sender_id: Optional[int] = None,
+        from_message_id: int = 0,
+        offset: int = 0,
+        limit: int = 100,
+        filter_type: Optional[str] = None,
+    ):
+        """Search messages in one chat, optionally scoped to a topic/sender."""
+        topic = (
+            {'@type': 'messageTopicForum', 'forum_topic_id': topic_id}
+            if topic_id is not None
+            else None
+        )
+        sender = (
+            {'@type': 'messageSenderUser', 'user_id': sender_id}
+            if sender_id is not None
+            else None
+        )
+        return self.send_data(
+            'searchChatMessages',
+            chat_id=chat_id,
+            topic_id=topic,
+            query=query,
+            sender_id=sender,
+            from_message_id=from_message_id,
+            offset=offset,
+            limit=limit,
+            filter=({'@type': filter_type} if filter_type is not None else None),
+        )
+
+    def search_messages(
+        self,
+        query: str,
+        offset: str = '',
+        limit: int = 100,
+        chat_list: Optional[str] = 'chatListMain',
+        filter_type: Optional[str] = None,
+        chat_type_filter: Optional[str] = None,
+        min_date: int = 0,
+        max_date: int = 0,
+    ):
+        """Search messages across chats."""
+        return self.send_data(
+            'searchMessages',
+            chat_list=({'@type': chat_list} if chat_list is not None else None),
+            query=query,
+            offset=offset,
+            limit=limit,
+            filter=({'@type': filter_type} if filter_type is not None else None),
+            chat_type_filter=(
+                {'@type': chat_type_filter} if chat_type_filter is not None else None
+            ),
+            min_date=min_date,
+            max_date=max_date,
+        )
+
     def get_chat_history(
         self,
         chat_id: int,
@@ -206,6 +281,78 @@ class API(BaseAPI):
             offset=offset,
             limit=limit,
             only_local=only_local,
+        )
+
+    def get_forum_topics(
+        self,
+        chat_id: int,
+        query: str = '',
+        offset_date: int = 0,
+        offset_message_id: int = 0,
+        offset_forum_topic_id: int = 0,
+        limit: int = 100,
+    ):
+        """Запрашивает список форумных топиков чата"""
+        return self.send_data(
+            'getForumTopics',
+            chat_id=chat_id,
+            query=query,
+            offset_date=offset_date,
+            offset_message_id=offset_message_id,
+            offset_forum_topic_id=offset_forum_topic_id,
+            limit=limit,
+        )
+
+    def get_forum_topic(self, chat_id: int, forum_topic_id: int):
+        """Запрашивает информацию о форумном топике"""
+        return self.send_data(
+            'getForumTopic',
+            chat_id=chat_id,
+            forum_topic_id=forum_topic_id,
+        )
+
+    def get_forum_topic_history(
+        self,
+        chat_id: int,
+        forum_topic_id: int,
+        limit: int = 100,
+        from_message_id: int = 0,
+        offset: int = 0,
+    ):
+        """Запрашивает историю форумного топика"""
+        return self.send_data(
+            'getForumTopicHistory',
+            chat_id=chat_id,
+            forum_topic_id=forum_topic_id,
+            from_message_id=from_message_id,
+            offset=offset,
+            limit=limit,
+        )
+
+    def get_message_thread(self, chat_id: int, message_id: int):
+        """Запрашивает информацию о ветке ответов на сообщение"""
+        return self.send_data(
+            'getMessageThread',
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+
+    def get_message_thread_history(
+        self,
+        chat_id: int,
+        message_id: int,
+        limit: int = 100,
+        from_message_id: int = 0,
+        offset: int = 0,
+    ):
+        """Запрашивает историю ветки ответов на сообщение"""
+        return self.send_data(
+            'getMessageThreadHistory',
+            chat_id=chat_id,
+            message_id=message_id,
+            from_message_id=from_message_id,
+            offset=offset,
+            limit=limit,
         )
 
     def get_web_page_instant_view(self, url: str, only_local: bool = False):
@@ -294,6 +441,44 @@ class API(BaseAPI):
             chat_id=chat_id,
         )
 
+    def get_file(self, file_id: int):
+        """Get compact information about a TDLib file."""
+        return self.send_data('getFile', file_id=file_id)
+
+    def download_file(
+        self,
+        file_id: int,
+        priority: int = 16,
+        offset: int = 0,
+        limit: int = 0,
+        synchronous: bool = False,
+    ):
+        """Start or synchronously complete a file download."""
+        return self.send_data(
+            'downloadFile',
+            file_id=file_id,
+            priority=priority,
+            offset=offset,
+            limit=limit,
+            synchronous=synchronous,
+        )
+
+    def get_message_properties(self, chat_id: int, message_id: int):
+        """Get actions currently available for a message."""
+        return self.send_data(
+            'getMessageProperties',
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+
+    def recognize_speech(self, chat_id: int, message_id: int):
+        """Request speech recognition for a voice or video note."""
+        return self.send_data(
+            'recognizeSpeech',
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+
     def get_callback_query_answer(
         self,
         chat_id: int,
@@ -376,6 +561,7 @@ class API(BaseAPI):
         from_background: bool = None,
         send_date: int = None,
         message_thread_id: Optional[int] = None,
+        forum_topic_id: Optional[int] = None,
     ):
         """Sends a message to a chat.
         The chat must be in the tdlib's database.
@@ -383,8 +569,13 @@ class API(BaseAPI):
         Chat is being saved to the database when the client
         receives a message or when you call the `get_chats` method.
 
-        message_thread_id - не используется, оставлено для обратной совместимости
+        message_thread_id identifies a topic in a non-forum supergroup.
+        forum_topic_id identifies a topic in a forum supergroup.
         """
+        if message_thread_id is not None and forum_topic_id is not None:
+            raise ValueError(
+                'message_thread_id and forum_topic_id cannot be used together'
+            )
         formatted_text = {'@type': 'formattedText', 'text': text}
 
         if parse_mode is not None and parse_mode is not TextParseMode.NONE:
@@ -412,10 +603,22 @@ class API(BaseAPI):
                 'quote': None,
             }
 
+        topic_id: Optional[Dict[Any, Any]] = None
+        if message_thread_id is not None:
+            topic_id = {
+                '@type': 'messageTopicThread',
+                'message_thread_id': message_thread_id,
+            }
+        elif forum_topic_id is not None:
+            topic_id = {
+                '@type': 'messageTopicForum',
+                'forum_topic_id': forum_topic_id,
+            }
+
         return self.send_data(
             'sendMessage',
             chat_id=chat_id,
-            topic_id=None,
+            topic_id=topic_id,
             reply_to=reply_to,
             input_message_content=input_message_content,
             options=_get_send_message_options(
@@ -463,15 +666,41 @@ class API(BaseAPI):
         send_copy: bool = False,
         remove_caption: bool = False,
         only_preview: bool = False,  # deprecated  # noqa
+        forum_topic_id: Optional[int] = None,
     ):
         """Запрос на пересылку сообщения из одного чата в другой
 
-        message_thread_id - не используется, оставлено для обратной совместимости
+        ``message_thread_id`` is kept for compatibility with older callers, but
+        TDLib's ``forwardMessages`` only supports forum topics. Use
+        ``forum_topic_id`` for a forum destination.
         """
+        if message_thread_id is not None:
+            raise ValueError(
+                'message_thread_id is not supported by forwardMessages; '
+                'use forum_topic_id for forum topics'
+            )
+        if forum_topic_id is not None:
+            topic_id = {
+                '@type': 'messageTopicForum',
+                'forum_topic_id': forum_topic_id,
+            }
+        else:
+            topic_id = None
+
+        if not 1 <= len(message_ids) <= 100:
+            raise ValueError('forwardMessages requires between 1 and 100 message IDs')
+        if any(
+            not isinstance(message_id, int) or message_id < 1
+            for message_id in message_ids
+        ):
+            raise ValueError('message IDs must be positive integers')
+        if any(left >= right for left, right in zip(message_ids, message_ids[1:])):
+            raise ValueError('message IDs must be strictly increasing')
+
         return self.send_data(
             'forwardMessages',
             chat_id=chat_id,
-            topic_id=None,
+            topic_id=topic_id,
             from_chat_id=from_chat_id,
             message_ids=message_ids,
             options=_get_send_message_options(
@@ -628,13 +857,14 @@ class API(BaseAPI):
         message_id: int,
         reaction_type: Optional[ReactionType] = None,
         value: Union[str, int] = '',
-        offset: int = 0,
+        offset: Union[str, int] = '',
         limit: int = 100,
     ):
         """Запрос на информацию о добавленных реакциях к сообщению"""
-        limit = min(limit, 100)
+        limit = min(max(limit, 1), 100)
         if reaction_type is not None:
             reaction_type = ReactionType(reaction_type).build(value)
+        offset = '' if offset is None else str(offset)
         return self.send_data(
             'getMessageAddedReactions',
             chat_id=chat_id,

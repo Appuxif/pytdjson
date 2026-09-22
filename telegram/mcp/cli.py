@@ -85,6 +85,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         else:
             server.run(transport='stdio')
         return 0
+    except KeyboardInterrupt:
+        return 0
     except (ConfigurationError, RuntimeError) as error:
         print(f'pytdjson-mcp: {error}', file=sys.stderr)
         return 2

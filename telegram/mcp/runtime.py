@@ -59,17 +59,19 @@ class _UpdateBuffer:
         )
         return removed
 
-    def remove_message(self, message_id: int) -> list[int]:
+    def remove_message(self, chat_id: int, message_id: int) -> list[int]:
         removed = [
             sequence
             for sequence, update in self.events
-            if _update_message_id(update) == message_id
+            if _update_chat_id(update) == chat_id
+            and _update_message_id(update) == message_id
         ]
         self.events = deque(
             (
                 (sequence, update)
                 for sequence, update in self.events
-                if _update_message_id(update) != message_id
+                if _update_chat_id(update) != chat_id
+                or _update_message_id(update) != message_id
             ),
             maxlen=self.maxlen,
         )
@@ -260,8 +262,10 @@ class _PersistentState:
                     payload TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS mcp_ignored_messages (
-                    message_id INTEGER PRIMARY KEY,
-                    sequence INTEGER NOT NULL
+                    chat_id INTEGER NOT NULL,
+                    message_id INTEGER NOT NULL,
+                    sequence INTEGER NOT NULL,
+                    PRIMARY KEY(chat_id, message_id)
                 );
                 CREATE TABLE IF NOT EXISTS mcp_transcription_requests (
                     chat_id INTEGER NOT NULL,
@@ -284,6 +288,27 @@ class _PersistentState:
             if 'topic_ids' not in columns:
                 self.connection.execute(
                     "ALTER TABLE mcp_subscriptions ADD COLUMN topic_ids TEXT"
+                )
+            ignored_columns = list(
+                self.connection.execute(
+                    'PRAGMA table_info(mcp_ignored_messages)'
+                )
+            )
+            ignored_primary_key = [
+                row['name']
+                for row in sorted(ignored_columns, key=lambda item: item['pk'])
+                if row['pk']
+            ]
+            if ignored_primary_key != ['chat_id', 'message_id']:
+                # Older versions stored message IDs without their chat, so
+                # those entries cannot be migrated without risking false matches.
+                self.connection.execute('DROP TABLE mcp_ignored_messages')
+                self.connection.execute(
+                    'CREATE TABLE mcp_ignored_messages ('
+                    'chat_id INTEGER NOT NULL, '
+                    'message_id INTEGER NOT NULL, '
+                    'sequence INTEGER NOT NULL, '
+                    'PRIMARY KEY(chat_id, message_id))'
                 )
             self.connection.commit()
             if self.path:
@@ -339,12 +364,15 @@ class _PersistentState:
                 events.append((row['sequence'], payload))
             ignored_rows = list(
                 self.connection.execute(
-                    'SELECT message_id FROM mcp_ignored_messages '
+                    'SELECT chat_id, message_id FROM mcp_ignored_messages '
                     'ORDER BY sequence DESC LIMIT ?',
                     (maxlen,),
                 )
             )
-            ignored_message_ids = [row['message_id'] for row in reversed(ignored_rows)]
+            ignored_message_ids = [
+                (row['chat_id'], row['message_id'])
+                for row in reversed(ignored_rows)
+            ]
             transcription_requests = []
             for row in self.connection.execute(
                 'SELECT chat_id, message_id, original_message '
@@ -458,32 +486,33 @@ class _PersistentState:
             raise TelegramMCPError('cannot remove transcription request') from error
 
     def add_ignored_message(
-        self, message_id: int, sequence: int, maxlen: int
-    ) -> list[int]:
+        self, chat_id: int, message_id: int, sequence: int, maxlen: int
+    ) -> list[tuple[int, int]]:
         try:
             with self.connection:
                 self.connection.execute(
                     'INSERT OR REPLACE INTO mcp_ignored_messages '
-                    '(message_id, sequence) VALUES (?, ?)',
-                    (message_id, sequence),
+                    '(chat_id, message_id, sequence) VALUES (?, ?, ?)',
+                    (chat_id, message_id, sequence),
                 )
                 self._set_metadata('ignored_next_sequence', sequence)
                 stale_rows = list(
                     self.connection.execute(
-                        'SELECT message_id FROM mcp_ignored_messages '
+                        'SELECT chat_id, message_id FROM mcp_ignored_messages '
                         'ORDER BY sequence ASC LIMIT -1 OFFSET ?',
                         (maxlen,),
                     )
                 )
-                stale_ids = [row['message_id'] for row in stale_rows]
-                if stale_ids:
-                    placeholders = ','.join('?' for _ in stale_ids)
-                    self.connection.execute(
+                stale_keys = [
+                    (row['chat_id'], row['message_id']) for row in stale_rows
+                ]
+                if stale_keys:
+                    self.connection.executemany(
                         'DELETE FROM mcp_ignored_messages '
-                        f'WHERE message_id IN ({placeholders})',
-                        stale_ids,
+                        'WHERE chat_id = ? AND message_id = ?',
+                        stale_keys,
                     )
-                return stale_ids
+                return stale_keys
         except sqlite3.Error as error:
             raise TelegramMCPError('cannot persist ignored MCP message ID') from error
 
@@ -510,8 +539,8 @@ class TelegramRuntime:
         self._updates = _UpdateBuffer()
         self._subscribed_chat_ids: set[int] = set()
         self._subscriptions: dict[int, dict] = {}
-        self._ignored_message_ids: set[int] = set()
-        self._ignored_message_order: Deque[int] = deque()
+        self._ignored_message_ids: set[tuple[int, int]] = set()
+        self._ignored_message_order: Deque[tuple[int, int]] = deque()
         self._ignored_next_sequence = 0
         self._transcription_requests: dict[tuple[int, int], dict] = {}
         self._load_persistent_state()
@@ -592,7 +621,13 @@ class TelegramRuntime:
             self._record_transcription_update(update)
         if update_type == 'mcpMessageTranscription':
             return
-        if _update_message_id(update) in self._ignored_message_ids:
+        chat_id = _update_chat_id(update)
+        message_id = _update_message_id(update)
+        if (
+            chat_id is not None
+            and message_id is not None
+            and (chat_id, message_id) in self._ignored_message_ids
+        ):
             return
         if _update_matches_subscription(update, self._subscriptions):
             sequence = self._updates.add(update)
@@ -653,24 +688,26 @@ class TelegramRuntime:
             if result is not None:
                 self._record_transcription_result(chat_id, message_id, result)
 
-    def _remember_sent_message(self, message_id: int) -> None:
-        if message_id in self._ignored_message_ids:
+    def _remember_sent_message(self, chat_id: int, message_id: int) -> None:
+        message_key = (chat_id, message_id)
+        if message_key in self._ignored_message_ids:
             return
-        self._ignored_message_ids.add(message_id)
-        self._ignored_message_order.append(message_id)
+        self._ignored_message_ids.add(message_key)
+        self._ignored_message_order.append(message_key)
         self._ignored_next_sequence += 1
         expired_ids = self._state.add_ignored_message(
+            chat_id,
             message_id,
             self._ignored_next_sequence,
             self._updates.maxlen,
         )
-        for expired_id in expired_ids:
+        for expired_key in expired_ids:
             try:
-                self._ignored_message_order.remove(expired_id)
+                self._ignored_message_order.remove(expired_key)
             except ValueError:
                 pass
-            self._ignored_message_ids.discard(expired_id)
-        removed = self._updates.remove_message(message_id)
+            self._ignored_message_ids.discard(expired_key)
+        removed = self._updates.remove_message(chat_id, message_id)
         self._state.delete_updates(removed)
 
     async def subscribe_for_updates(
@@ -911,15 +948,27 @@ class TelegramRuntime:
     async def send_message(self, *args: Any, **kwargs: Any) -> dict:
         result = await self.call('send_message', *args, **kwargs)
         message_id = result.get('id')
-        if message_id is not None:
-            self._remember_sent_message(message_id)
+        chat_id = result.get('chat_id')
+        if chat_id is None:
+            chat_id = kwargs.get('chat_id')
+        if chat_id is None and args:
+            chat_id = args[0]
+        if chat_id is not None and message_id is not None:
+            self._remember_sent_message(chat_id, message_id)
         return result
 
     async def forward_messages(self, *args: Any, **kwargs: Any) -> dict:
         result = await self.call('forward_messages', *args, **kwargs)
+        target_chat_id = kwargs.get('chat_id')
+        if target_chat_id is None and args:
+            target_chat_id = args[0]
         for message in result.get('messages') or []:
             if message and message.get('id') is not None:
-                self._remember_sent_message(message['id'])
+                chat_id = message.get('chat_id')
+                if chat_id is None:
+                    chat_id = target_chat_id
+                if chat_id is not None:
+                    self._remember_sent_message(chat_id, message['id'])
         return result
 
     async def add_message_reaction(self, *args: Any, **kwargs: Any) -> dict:

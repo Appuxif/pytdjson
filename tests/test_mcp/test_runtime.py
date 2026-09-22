@@ -154,7 +154,7 @@ class RuntimeTestCase(TestCase):
         async def exercise():
             runtime = TelegramRuntime(SimpleNamespace())
             await runtime.subscribe_for_updates(frozenset({10}))
-            runtime._remember_sent_message(2)
+            runtime._remember_sent_message(10, 2)
             self.assertEqual(2000, runtime._updates.events.maxlen)
             runtime._record_update({'@type': 'updateChatLastMessage', 'chat_id': 10})
             runtime._record_update(
@@ -201,7 +201,7 @@ class RuntimeTestCase(TestCase):
         self.assertEqual(2, len(result['messages']))
         self.assertEqual((10, 20, [1, 2]), call.args[1:])
         self.assertEqual({'send_copy': True}, call.kwargs)
-        self.assertEqual({101}, ignored_ids)
+        self.assertEqual({(10, 101)}, ignored_ids)
 
     def test_update_buffer_is_bounded(self):
         buffer = _UpdateBuffer(maxlen=2)
@@ -551,7 +551,7 @@ class RuntimeTestCase(TestCase):
                         'message': {'id': 1, 'chat_id': 10},
                     }
                 )
-                first._remember_sent_message(2)
+                first._remember_sent_message(10, 2)
 
             asyncio.run(populate())
 

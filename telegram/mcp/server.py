@@ -542,6 +542,10 @@ def create_server(
         """
         filter_type = _search_filter(filter)
         if chat_id is not None:
+            if min_date or max_date:
+                raise ToolError(
+                    'min_date and max_date are only supported for global searches'
+                )
             result = await runtime.call(
                 'search_chat_messages',
                 chat_id,
@@ -560,6 +564,21 @@ def create_server(
                 else ''
             )
         else:
+            if sender_id is not None:
+                raise ToolError('sender_id requires chat_id for message search')
+            if topic_id is not None:
+                raise ToolError('topic_id requires chat_id for message search')
+            if filter_type in {
+                'searchMessagesFilterMention',
+                'searchMessagesFilterUnreadMention',
+                'searchMessagesFilterUnreadReaction',
+                'searchMessagesFilterUnreadPollVote',
+                'searchMessagesFilterFailedToSend',
+                'searchMessagesFilterPinned',
+            }:
+                raise ToolError(
+                    f'filter {filter!r} is not supported for global message search'
+                )
             result = await runtime.call(
                 'search_messages',
                 query=query,

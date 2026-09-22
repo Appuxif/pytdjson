@@ -50,22 +50,24 @@ class RuntimeStub:
             'next_cursor': 0,
         }
 
-    async def poll_updates(self, timeout, cursor=None):
-        self.poll_calls.append((timeout, cursor))
+    async def poll_updates(self, timeout, limit=1, cursor=None):
+        self.poll_calls.append((timeout, limit, cursor))
         return (
-            {
-                '@type': 'updateNewMessage',
-                'message': {
-                    'id': 77,
-                    'chat_id': 10,
-                    'date': 123,
-                    'is_outgoing': False,
-                    'content': {
-                        '@type': 'messageText',
-                        'text': {'text': 'incoming'},
+            [
+                {
+                    '@type': 'updateNewMessage',
+                    'message': {
+                        'id': 77,
+                        'chat_id': 10,
+                        'date': 123,
+                        'is_outgoing': False,
+                        'content': {
+                            '@type': 'messageText',
+                            'text': {'text': 'incoming'},
+                        },
                     },
-                },
-            },
+                }
+            ],
             5,
             False,
             False,
@@ -239,14 +241,19 @@ class ServerTestCase(TestCase):
             runtime = RuntimeStub()
             server = create_server(settings, runtime)
             awaitable_call(server, 'subscribe_for_updates', {'chat_ids': [10]})
-            polled = awaitable_call(server, 'poll_updates', {'timeout': 3, 'cursor': 2})
+            polled = awaitable_call(
+                server,
+                'poll_updates',
+                {'timeout': 3, 'limit': 1, 'cursor': 2},
+            )
             committed = awaitable_call(server, 'commit_updates', {'cursor': 5})
 
         payload = json.loads(polled.content[0].text)
         self.assertEqual(77, payload['update']['message']['id'])
+        self.assertEqual([77], [item['message']['id'] for item in payload['updates']])
         self.assertEqual(5, payload['next_cursor'])
         self.assertFalse(payload['timed_out'])
-        self.assertEqual([(3, 2)], runtime.poll_calls)
+        self.assertEqual([(3, 1, 2)], runtime.poll_calls)
         self.assertEqual(1, json.loads(committed.content[0].text)['removed_count'])
 
     def test_tool_returns_structured_compact_result(self):

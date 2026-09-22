@@ -130,15 +130,17 @@ def create_server(
     @mcp.tool(annotations=READ_ONLY)
     async def poll_updates(
         timeout: POLL_TIMEOUT = 30.0,
+        limit: LIMIT = 1,
         cursor: CURSOR | None = None,
     ) -> dict:
         """Wait for updates from subscribed chats.
 
         Raises an error immediately when no chat subscriptions are configured.
-        The call returns one oldest update or waits until ``timeout`` seconds
-        elapse. Pass the returned ``next_cursor`` to the next call to continue
-        without repeating the update. Use ``commit_updates`` after processing
-        it. Without a cursor, the retained buffer is read from its oldest
+        The call returns up to ``limit`` oldest updates or waits until
+        ``timeout`` seconds elapse. ``limit`` defaults to one. Pass the
+        returned ``next_cursor`` to the next call to continue without
+        repeating the updates. Use ``commit_updates`` after processing them.
+        Without a cursor, the retained buffer is read from its oldest
         available event.
         """
         if not runtime.update_subscription()['subscribed_chat_ids']:
@@ -146,12 +148,16 @@ def create_server(
                 'no update subscriptions configured; call '
                 'subscribe_for_updates first'
             )
-        update, next_cursor, timed_out, cursor_expired = await runtime.poll_updates(
-            timeout, cursor
+        updates, next_cursor, timed_out, cursor_expired = await runtime.poll_updates(
+            timeout, limit, cursor
         )
         state = runtime.update_subscription()
+        projected_updates = [projection.update(update) for update in updates]
         return {
-            'update': projection.update(update),
+            # Keep the singular field for clients written before batching was
+            # added. New clients should consume `updates`.
+            'update': projected_updates[0] if len(projected_updates) == 1 else None,
+            'updates': projected_updates,
             'timed_out': timed_out,
             'cursor_expired': cursor_expired,
             'next_cursor': next_cursor,

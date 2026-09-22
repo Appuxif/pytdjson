@@ -63,8 +63,12 @@ non-forum message threads, and forum topics.
 
 For live updates, first call `subscribe_for_updates` with the chat IDs of
 interest. Calling `poll_updates` without any subscriptions returns an error
-immediately. Otherwise it waits for one update and returns a cursor. After
-processing the update, call `commit_updates` with that cursor.
+immediately. Otherwise it waits for up to `limit` updates, where `limit`
+defaults to `1`, and returns a cursor. After processing the updates, call
+`commit_updates` with that cursor. The MCP runtime persists subscriptions,
+buffered updates, cursors, and sent-message suppression IDs in its own
+`mcp_state.sqlite3` file alongside the TDLib data; it does not access TDLib's
+private database schema.
 `check_updates_subscription` shows active subscriptions and the bounded
 in-memory buffer. `unsubscribe_from_updates` stops collecting updates and
 removes buffered events for those chats.

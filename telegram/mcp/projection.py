@@ -125,7 +125,11 @@ def _media(value: dict) -> Optional[dict]:
             if _file(item.get('photo')) is not None
         ]
     else:
-        file_value = media.get(media_key)
+        file_key = {
+            'messageVoiceNote': 'voice',
+            'messageVideoNote': 'video',
+        }.get(content_type, media_key)
+        file_value = media.get(file_key)
         if file_value is None:
             file_value = media.get('file')
         result['file'] = _file(file_value)

@@ -366,6 +366,22 @@ class API(BaseAPI):
             chat_id=chat_id,
         )
 
+    def get_message_properties(self, chat_id: int, message_id: int):
+        """Get actions currently available for a message."""
+        return self.send_data(
+            'getMessageProperties',
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+
+    def recognize_speech(self, chat_id: int, message_id: int):
+        """Request speech recognition for a voice or video note."""
+        return self.send_data(
+            'recognizeSpeech',
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+
     def get_callback_query_answer(
         self,
         chat_id: int,

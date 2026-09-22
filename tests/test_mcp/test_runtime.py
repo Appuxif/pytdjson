@@ -167,6 +167,150 @@ class RuntimeTestCase(TestCase):
         self.assertEqual([3], [item['message']['id'] for item in second[0]])
         self.assertEqual(3, second[1])
 
+    def test_transcription_result_is_delivered_as_an_async_poll_update(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(frozenset({10}))
+
+            async def call(method, *args, **kwargs):
+                if method == 'get_message':
+                    return {
+                        'id': 55,
+                        'chat_id': 10,
+                        'sender_id': {
+                            '@type': 'messageSenderUser',
+                            'user_id': 20,
+                        },
+                        'content': {
+                            '@type': 'messageVoiceNote',
+                            'voice_note': {
+                                'duration': 4,
+                                'speech_recognition_result': None,
+                            },
+                        },
+                    }
+                if method == 'get_message_properties':
+                    return {'can_recognize_speech': True}
+                if method == 'recognize_speech':
+                    return {'@type': 'ok'}
+                raise AssertionError(method)
+
+            runtime.call = call
+            request = await runtime.request_message_transcript(10, 55)
+
+            runtime._record_update(
+                {
+                    '@type': 'updateMessageContent',
+                    'chat_id': 10,
+                    'message_id': 55,
+                    'new_content': {
+                        '@type': 'messageVoiceNote',
+                        'voice_note': {
+                            'speech_recognition_result': {
+                                '@type': 'speechRecognitionResultPending',
+                                'partial_text': 'partial',
+                            }
+                        },
+                    },
+                }
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateMessageContent',
+                    'chat_id': 10,
+                    'message_id': 55,
+                    'new_content': {
+                        '@type': 'messageVoiceNote',
+                        'voice_note': {
+                            'speech_recognition_result': {
+                                '@type': 'speechRecognitionResultText',
+                                'text': 'hello from voice',
+                            }
+                        },
+                    },
+                }
+            )
+            updates, cursor, timed_out, _ = await runtime.poll_updates(
+                timeout=0.01, limit=1
+            )
+            return request, updates, cursor, timed_out, runtime.update_subscription()
+
+        request, updates, cursor, timed_out, state = asyncio.run(exercise())
+
+        self.assertEqual('pending', request['status'])
+        self.assertEqual([], state['pending_transcriptions'])
+        self.assertEqual('mcpMessageTranscription', updates[0]['@type'])
+        self.assertEqual('completed', updates[0]['status'])
+        self.assertEqual('hello from voice', updates[0]['text'])
+        self.assertEqual(55, updates[0]['original_message']['id'])
+        self.assertEqual(1, cursor)
+        self.assertFalse(timed_out)
+
+    def test_unrequested_message_content_updates_are_ignored(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(frozenset({10}))
+            runtime._record_update(
+                {
+                    '@type': 'updateMessageContent',
+                    'chat_id': 10,
+                    'message_id': 55,
+                    'new_content': {
+                        '@type': 'messageVoiceNote',
+                        'voice_note': {
+                            'speech_recognition_result': {
+                                '@type': 'speechRecognitionResultText',
+                                'text': 'unrequested',
+                            }
+                        },
+                    },
+                }
+            )
+            return await runtime.poll_updates(timeout=0.01, limit=1)
+
+        updates, _, timed_out, _ = asyncio.run(exercise())
+
+        self.assertEqual([], updates)
+        self.assertTrue(timed_out)
+
+    def test_pending_transcription_is_persisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = SimpleNamespace(files_directory=directory)
+            first = TelegramRuntime(settings)
+
+            async def call(method, *args, **kwargs):
+                if method == 'get_message':
+                    return {
+                        'id': 55,
+                        'chat_id': 10,
+                        'content': {
+                            '@type': 'messageVideoNote',
+                            'video_note': {
+                                'speech_recognition_result': None,
+                            },
+                        },
+                    }
+                if method == 'get_message_properties':
+                    return {'can_recognize_speech': True}
+                if method == 'recognize_speech':
+                    return {'@type': 'ok'}
+                raise AssertionError(method)
+
+            async def populate():
+                await first.subscribe_for_updates(frozenset({10}))
+                first.call = call
+                return await first.request_message_transcript(10, 55)
+
+            request = asyncio.run(populate())
+            restored = TelegramRuntime(settings)
+            state = restored.update_subscription()
+
+        self.assertEqual('pending', request['status'])
+        self.assertEqual(
+            [{'chat_id': 10, 'message_id': 55}],
+            state['pending_transcriptions'],
+        )
+
     def test_state_is_restored_from_the_client_data_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = SimpleNamespace(files_directory=directory)

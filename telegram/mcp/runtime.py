@@ -114,7 +114,50 @@ def _update_chat_id(update: dict) -> Optional[int]:
 
 
 def _update_message_id(update: dict) -> Optional[int]:
+    if update.get('message_id') is not None:
+        return update['message_id']
     return (update.get('message') or {}).get('id')
+
+
+def _speech_recognition_result(content: Optional[dict]) -> Optional[dict]:
+    if not content:
+        return None
+    content_type = content.get('@type')
+    media_key = {
+        'messageVoiceNote': 'voice_note',
+        'messageVideoNote': 'video_note',
+    }.get(content_type)
+    if media_key is None:
+        return None
+    media = content.get(media_key) or {}
+    result = media.get('speech_recognition_result') or {}
+    result_type = result.get('@type')
+    if result_type == 'speechRecognitionResultText':
+        return {'status': 'completed', 'text': result.get('text', '')}
+    if result_type == 'speechRecognitionResultError':
+        return {'status': 'failed', 'error': result.get('error') or {}}
+    return None
+
+
+def _transcription_message_metadata(message: dict, chat_id: int) -> dict:
+    metadata = {
+        key: message[key]
+        for key in (
+            'id',
+            'sender_id',
+            'sender',
+            'date',
+            'edit_date',
+            'is_outgoing',
+            'topic_id',
+            'reply_to',
+        )
+        if key in message
+    }
+    metadata['chat_id'] = message.get('chat_id', chat_id)
+    content = message.get('content') or {}
+    metadata['content'] = {'@type': content.get('@type')}
+    return metadata
 
 
 class _PersistentState:
@@ -153,6 +196,12 @@ class _PersistentState:
                 CREATE TABLE IF NOT EXISTS mcp_ignored_messages (
                     message_id INTEGER PRIMARY KEY,
                     sequence INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS mcp_transcription_requests (
+                    chat_id INTEGER NOT NULL,
+                    message_id INTEGER NOT NULL,
+                    original_message TEXT NOT NULL,
+                    PRIMARY KEY(chat_id, message_id)
                 );
                 """
             )
@@ -206,12 +255,28 @@ class _PersistentState:
                 )
             )
             ignored_message_ids = [row['message_id'] for row in reversed(ignored_rows)]
+            transcription_requests = []
+            for row in self.connection.execute(
+                'SELECT chat_id, message_id, original_message '
+                'FROM mcp_transcription_requests ORDER BY chat_id, message_id'
+            ):
+                original_message = json.loads(row['original_message'])
+                if not isinstance(original_message, dict):
+                    raise ValueError('stored original message is not an object')
+                transcription_requests.append(
+                    {
+                        'chat_id': row['chat_id'],
+                        'message_id': row['message_id'],
+                        'original_message': original_message,
+                    }
+                )
             return {
                 'subscribed_chat_ids': subscriptions,
                 'events': events,
                 'next_sequence': self._metadata_int('next_sequence'),
                 'ignored_message_ids': ignored_message_ids,
                 'ignored_next_sequence': self._metadata_int('ignored_next_sequence'),
+                'transcription_requests': transcription_requests,
             }
         except (TypeError, ValueError, json.JSONDecodeError, sqlite3.Error) as error:
             raise TelegramMCPError('cannot load MCP state database') from error
@@ -255,6 +320,34 @@ class _PersistentState:
                 )
         except sqlite3.Error as error:
             raise TelegramMCPError('cannot remove MCP updates from state') from error
+
+    def add_transcription_request(
+        self, chat_id: int, message_id: int, original_message: dict
+    ) -> None:
+        try:
+            with self.connection:
+                self.connection.execute(
+                    'INSERT OR REPLACE INTO mcp_transcription_requests '
+                    '(chat_id, message_id, original_message) VALUES (?, ?, ?)',
+                    (
+                        chat_id,
+                        message_id,
+                        json.dumps(original_message, ensure_ascii=False),
+                    ),
+                )
+        except (TypeError, ValueError, sqlite3.Error) as error:
+            raise TelegramMCPError('cannot persist transcription request') from error
+
+    def delete_transcription_request(self, chat_id: int, message_id: int) -> None:
+        try:
+            with self.connection:
+                self.connection.execute(
+                    'DELETE FROM mcp_transcription_requests '
+                    'WHERE chat_id = ? AND message_id = ?',
+                    (chat_id, message_id),
+                )
+        except sqlite3.Error as error:
+            raise TelegramMCPError('cannot remove transcription request') from error
 
     def add_ignored_message(
         self, message_id: int, sequence: int, maxlen: int
@@ -311,6 +404,7 @@ class TelegramRuntime:
         self._ignored_message_ids: set[int] = set()
         self._ignored_message_order: Deque[int] = deque()
         self._ignored_next_sequence = 0
+        self._transcription_requests: dict[tuple[int, int], dict] = {}
         self._load_persistent_state()
 
     def _load_persistent_state(self) -> None:
@@ -322,6 +416,10 @@ class TelegramRuntime:
         self._ignored_message_order = deque(state['ignored_message_ids'])
         self._ignored_message_ids = set(self._ignored_message_order)
         self._ignored_next_sequence = state['ignored_next_sequence']
+        self._transcription_requests = {
+            (item['chat_id'], item['message_id']): item['original_message']
+            for item in state['transcription_requests']
+        }
 
     async def start(self) -> None:
         self._mcp_loop = asyncio.get_running_loop()
@@ -350,6 +448,7 @@ class TelegramRuntime:
             await asyncio.sleep(0.1)
         else:
             raise TelegramMCPError('TDLib client failed to start')
+        await self._recover_transcription_requests()
         if self.on_ready:
             self.on_ready()
 
@@ -360,7 +459,11 @@ class TelegramRuntime:
         self._mcp_loop.call_soon_threadsafe(self._record_update, raw_update)
 
     def _record_update(self, update: dict) -> None:
-        if update.get('@type') != 'updateNewMessage':
+        update_type = update.get('@type')
+        if update_type == 'updateMessageContent':
+            self._record_transcription_update(update)
+            return
+        if update_type != 'updateNewMessage':
             return
         chat_id = _update_chat_id(update)
         if (
@@ -369,6 +472,51 @@ class TelegramRuntime:
         ):
             sequence = self._updates.add(update)
             self._state.add_update(sequence, update, self._updates.maxlen)
+
+    def _record_transcription_update(self, update: dict) -> None:
+        chat_id = _update_chat_id(update)
+        message_id = _update_message_id(update)
+        if chat_id is None or message_id is None:
+            return
+        if chat_id not in self._subscribed_chat_ids:
+            return
+        if (chat_id, message_id) not in self._transcription_requests:
+            return
+        result = _speech_recognition_result(update.get('new_content'))
+        if result is not None:
+            self._record_transcription_result(chat_id, message_id, result)
+
+    def _record_transcription_result(
+        self, chat_id: int, message_id: int, result: dict
+    ) -> None:
+        original_message = self._transcription_requests.get((chat_id, message_id))
+        if original_message is None:
+            return
+        update = {
+            '@type': 'mcpMessageTranscription',
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'status': result['status'],
+            'original_message': original_message,
+        }
+        if result['status'] == 'completed':
+            update['text'] = result.get('text', '')
+        else:
+            update['error'] = result.get('error') or {}
+        sequence = self._updates.add(update)
+        self._state.add_update(sequence, update, self._updates.maxlen)
+        self._transcription_requests.pop((chat_id, message_id), None)
+        self._state.delete_transcription_request(chat_id, message_id)
+
+    async def _recover_transcription_requests(self) -> None:
+        for chat_id, message_id in tuple(self._transcription_requests):
+            try:
+                message = await self.call('get_message', message_id, chat_id)
+            except TelegramMCPError:
+                continue
+            result = _speech_recognition_result(message.get('content'))
+            if result is not None:
+                self._record_transcription_result(chat_id, message_id, result)
 
     def _remember_sent_message(self, message_id: int) -> None:
         if message_id in self._ignored_message_ids:
@@ -404,6 +552,14 @@ class TelegramRuntime:
         self._subscribed_chat_ids.difference_update(chat_ids)
         removed_sequences = self._updates.remove_chats(chat_ids)
         self._state.delete_updates(removed_sequences)
+        for request_chat_id, request_message_id in tuple(self._transcription_requests):
+            if request_chat_id in removed_chat_ids:
+                self._transcription_requests.pop(
+                    (request_chat_id, request_message_id), None
+                )
+                self._state.delete_transcription_request(
+                    request_chat_id, request_message_id
+                )
         self._state.save_subscriptions(self._subscribed_chat_ids)
         return {
             'subscribed_chat_ids': sorted(self._subscribed_chat_ids),
@@ -417,6 +573,10 @@ class TelegramRuntime:
             'buffer_limit': self._updates.events.maxlen,
             'oldest_cursor': self._updates.oldest_cursor,
             'next_cursor': self._updates.next_sequence,
+            'pending_transcriptions': [
+                {'chat_id': chat_id, 'message_id': message_id}
+                for chat_id, message_id in sorted(self._transcription_requests)
+            ],
         }
 
     async def poll_updates(
@@ -467,6 +627,62 @@ class TelegramRuntime:
                 return [], self._updates.next_sequence, True, cursor_expired
             finally:
                 self._updates.waiters.discard(waiter)
+
+    async def request_message_transcript(self, chat_id: int, message_id: int) -> dict:
+        """Start asynchronous TDLib speech recognition for one message."""
+        if chat_id not in self._subscribed_chat_ids:
+            raise ValueError(
+                f'chat {chat_id} is not subscribed; call ' 'subscribe_for_updates first'
+            )
+
+        request_key = (chat_id, message_id)
+        original_message = self._transcription_requests.get(request_key)
+        if original_message is not None:
+            return {
+                'status': 'pending',
+                'chat_id': chat_id,
+                'message_id': message_id,
+                'original_message': original_message,
+            }
+
+        message = await self.call('get_message', message_id, chat_id)
+        content = message.get('content') or {}
+        if content.get('@type') not in {'messageVoiceNote', 'messageVideoNote'}:
+            raise ValueError(
+                'speech recognition is supported only for voice and video notes'
+            )
+
+        original_message = _transcription_message_metadata(message, chat_id)
+        existing_result = _speech_recognition_result(content)
+        if existing_result is not None:
+            response = {
+                'chat_id': chat_id,
+                'message_id': message_id,
+                'original_message': original_message,
+                **existing_result,
+            }
+            return response
+
+        properties = await self.call(
+            'get_message_properties', chat_id=chat_id, message_id=message_id
+        )
+        if not properties.get('can_recognize_speech', False):
+            raise ValueError('TDLib does not allow speech recognition for this message')
+
+        self._transcription_requests[request_key] = original_message
+        self._state.add_transcription_request(chat_id, message_id, original_message)
+        try:
+            await self.call('recognize_speech', chat_id, message_id)
+        except Exception:
+            self._transcription_requests.pop(request_key, None)
+            self._state.delete_transcription_request(chat_id, message_id)
+            raise
+        return {
+            'status': 'pending',
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'original_message': original_message,
+        }
 
     async def commit_updates(self, cursor: int) -> dict:
         removed_sequences = self._updates.commit(cursor)

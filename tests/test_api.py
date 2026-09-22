@@ -119,6 +119,27 @@ class ApiTestCase(TestCase):
             self.client.query,
         )
 
+    def test_speech_recognition_uses_tdlib_methods(self):
+        self.api.get_message_properties(1, 2)
+        self.assertEqual(
+            {
+                '@type': 'getMessageProperties',
+                'chat_id': 1,
+                'message_id': 2,
+            },
+            self.client.query,
+        )
+
+        self.api.recognize_speech(1, 2)
+        self.assertEqual(
+            {
+                '@type': 'recognizeSpeech',
+                'chat_id': 1,
+                'message_id': 2,
+            },
+            self.client.query,
+        )
+
     def test_send_message_uses_forum_topic(self):
         self.api.send_message(
             1,

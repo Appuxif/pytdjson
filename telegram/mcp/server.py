@@ -24,6 +24,12 @@ SUBSCRIPTION = ToolAnnotations(
     destructiveHint=False,
     idempotentHint=True,
 )
+TRANSCRIPTION = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=True,
+)
 LIMIT = Annotated[int, Field(ge=1, le=100)]
 USER_IDS = Annotated[list[int], Field(min_length=1, max_length=200)]
 CHAT_ID = Annotated[int, Field(ne=0)]
@@ -291,6 +297,20 @@ def create_server(
         return projection.message(
             await runtime.call('get_message', message_id, chat_id)
         )
+
+    @mcp.tool(annotations=TRANSCRIPTION)
+    async def request_message_transcript(chat_id: int, message_id: MESSAGE_ID) -> dict:
+        """Start asynchronous speech recognition for a voice or video note.
+
+        The request returns immediately. Subscribe to the chat and keep
+        polling for a ``message_transcription`` update containing the final
+        transcript or an error.
+        """
+        try:
+            result = await runtime.request_message_transcript(chat_id, message_id)
+        except ValueError as error:
+            raise ToolError(str(error)) from error
+        return projection.transcription_request(result)
 
     @mcp.tool(annotations=SEND)
     async def send_message(

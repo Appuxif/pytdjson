@@ -73,6 +73,14 @@ private database schema.
 in-memory buffer. `unsubscribe_from_updates` stops collecting updates and
 removes buffered events for those chats.
 
+Voice messages and round video messages can be transcribed asynchronously.
+After receiving one through `poll_updates`, call
+`request_message_transcript(chat_id, message_id)`. The tool returns immediately
+with `status: "pending"`; keep polling for a `message_transcription` event with
+the final text or an error and commit it using the normal cursor workflow.
+Transcription requests survive an MCP restart. TDLib does not provide built-in
+transcription for ordinary audio files or regular videos.
+
 For one shared local TDLib session used by multiple MCP clients, run the
 Streamable HTTP transport in a persistent terminal or service:
 

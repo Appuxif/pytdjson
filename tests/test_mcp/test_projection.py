@@ -76,6 +76,32 @@ class ProjectionTestCase(TestCase):
         self.assertTrue(result['sticker_is_premium'])
         self.assertNotIn('sticker', result)
 
+    def test_message_transcription_update_keeps_original_message_metadata(self):
+        result = projection.update(
+            {
+                '@type': 'mcpMessageTranscription',
+                'chat_id': 1,
+                'message_id': 2,
+                'status': 'completed',
+                'text': 'hello from audio',
+                'original_message': {
+                    'id': 2,
+                    'chat_id': 1,
+                    'sender_id': {
+                        '@type': 'messageSenderUser',
+                        'user_id': 3,
+                    },
+                    'content': {'@type': 'messageVoiceNote'},
+                },
+            }
+        )
+
+        self.assertEqual('message_transcription', result['type'])
+        self.assertEqual('completed', result['status'])
+        self.assertEqual('hello from audio', result['text'])
+        self.assertEqual(2, result['original_message']['id'])
+        self.assertEqual('messageVoiceNote', result['original_message']['content_type'])
+
     def test_forum_topics_projection_keeps_topic_identity_and_cursor(self):
         result = projection.forum_topics(
             {

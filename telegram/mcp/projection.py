@@ -43,6 +43,30 @@ def _reply_to(value: Optional[dict]) -> Optional[dict]:
     return result
 
 
+def _transcript(content: dict) -> Optional[dict]:
+    media_key = {
+        'messageVoiceNote': 'voice_note',
+        'messageVideoNote': 'video_note',
+    }.get(content.get('@type'))
+    if media_key is None:
+        return None
+    result = (content.get(media_key) or {}).get('speech_recognition_result')
+    if not result:
+        return None
+    result_type = result.get('@type')
+    if result_type == 'speechRecognitionResultPending':
+        return {'status': 'pending', 'text': result.get('partial_text', '')}
+    if result_type == 'speechRecognitionResultText':
+        return {'status': 'completed', 'text': result.get('text', '')}
+    if result_type == 'speechRecognitionResultError':
+        error = result.get('error') or {}
+        return {
+            'status': 'failed',
+            'error': {key: error[key] for key in ('code', 'message') if key in error},
+        }
+    return None
+
+
 def message(value: Optional[dict]) -> Optional[dict]:
     if not value:
         return None
@@ -64,11 +88,32 @@ def message(value: Optional[dict]) -> Optional[dict]:
         'reply_to': _reply_to(value.get('reply_to')),
         'content_type': content.get('@type'),
         'text': text_value,
+        'transcript': _transcript(content),
         'sticker_emoji': sticker_emoji,
         'sticker_id': sticker.get('id'),
         'sticker_set_id': sticker.get('set_id'),
         'sticker_is_premium': content.get('is_premium'),
     }
+
+
+def transcription_request(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    result = {
+        'status': value.get('status'),
+        'chat_id': value.get('chat_id'),
+        'message_id': value.get('message_id'),
+    }
+    if 'text' in value:
+        result['text'] = value['text']
+    if 'error' in value:
+        error = value['error'] or {}
+        result['error'] = {
+            key: error[key] for key in ('code', 'message') if key in error
+        }
+    if 'original_message' in value:
+        result['original_message'] = message(value['original_message'])
+    return result
 
 
 def _update_chat_id(value: dict) -> Optional[int]:
@@ -92,6 +137,10 @@ def update(value: Optional[dict]) -> Optional[dict]:
         'type': value.get('@type'),
         'chat_id': _update_chat_id(value),
     }
+    if value.get('@type') == 'mcpMessageTranscription':
+        result['type'] = 'message_transcription'
+        result.update(transcription_request(value) or {})
+        return result
     for key in (
         'date',
         'message_id',

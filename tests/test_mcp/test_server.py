@@ -83,6 +83,18 @@ class RuntimeStub:
     async def send_message(self, *args, **kwargs):
         return await self.call('send_message', *args, **kwargs)
 
+    async def request_message_transcript(self, chat_id, message_id):
+        return {
+            'status': 'pending',
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'original_message': {
+                'id': message_id,
+                'chat_id': chat_id,
+                'content': {'@type': 'messageVoiceNote'},
+            },
+        }
+
     async def call(self, method, *args, **kwargs):
         self.calls.append((method, args, kwargs))
         if method == 'get_me':
@@ -148,7 +160,7 @@ class ServerTestCase(TestCase):
             )
             tools = asyncio.run(create_server(settings).list_tools())
 
-        self.assertEqual(27, len(tools))
+        self.assertEqual(28, len(tools))
         tool_names = [tool.name for tool in tools]
         self.assertNotIn('view_messages', tool_names)
         self.assertIn('send_message', tool_names)
@@ -159,6 +171,7 @@ class ServerTestCase(TestCase):
             'unsubscribe_from_updates',
             'commit_updates',
             'send_message',
+            'request_message_transcript',
         }
         self.assertTrue(
             all(
@@ -176,6 +189,33 @@ class ServerTestCase(TestCase):
             tool for tool in tools if tool.name == 'get_forum_topic_history'
         )
         self.assertIn('oldest returned message ID', topic_history.description)
+
+    def test_request_message_transcript_returns_pending_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            result = asyncio.run(
+                create_server(settings, runtime).call_tool(
+                    'request_message_transcript',
+                    {'chat_id': 10, 'message_id': 77},
+                )
+            )
+
+        payload = json.loads(result.content[0].text)
+        self.assertEqual('pending', payload['status'])
+        self.assertEqual(10, payload['chat_id'])
+        self.assertEqual(77, payload['message_id'])
+        self.assertEqual(
+            'messageVoiceNote', payload['original_message']['content_type']
+        )
 
     def test_update_subscription_tools_manage_selected_chats(self):
         with tempfile.TemporaryDirectory() as directory:

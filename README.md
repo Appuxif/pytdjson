@@ -61,6 +61,12 @@ their numeric IDs to the private dotenv file:
 Set `PYTDJSON_ALLOW_SEND_TO_CHATS=*` only when sending to every chat is
 intentional. The `send_message` tool supports ordinary messages, replies,
 non-forum message threads, and forum topics.
+The `forward_messages` tool uses the same destination allowlist, requires an
+explicit `send_copy` choice, and accepts up to 100 strictly increasing source
+message IDs per call. It can target a forum topic with `forum_topic_id`; TDLib
+does not support forwarding into ordinary non-forum message threads. Protected
+or otherwise unavailable source messages are reported individually in
+`failed_message_ids`, while successful messages remain in source order.
 
 For live updates, first call `subscribe_for_updates` with the chat IDs of
 interest. Calling `poll_updates` without any subscriptions returns an error

@@ -254,3 +254,58 @@ class ApiTestCase(TestCase):
             },
             self.client.query,
         )
+
+    def test_forward_messages_uses_forum_topic_and_preserves_options(self):
+        self.api.forward_messages(
+            1,
+            2,
+            [10, 11],
+            disable_notification=True,
+            send_copy=True,
+            remove_caption=True,
+            forum_topic_id=84427,
+        )
+
+        self.assertEqual(
+            {
+                '@type': 'forwardMessages',
+                'chat_id': 1,
+                'topic_id': {
+                    '@type': 'messageTopicForum',
+                    'forum_topic_id': 84427,
+                },
+                'from_chat_id': 2,
+                'message_ids': [10, 11],
+                'options': {
+                    'disable_notification': True,
+                    'type': 'messageSendOptions',
+                },
+                'send_copy': True,
+                'remove_caption': True,
+            },
+            self.client.query,
+        )
+
+    def test_forward_messages_rejects_non_forum_thread_and_invalid_ids(self):
+        with self.assertRaisesRegex(ValueError, 'message_thread_id'):
+            self.api.forward_messages(1, 2, [10], message_thread_id=7)
+
+        with self.assertRaisesRegex(ValueError, 'strictly increasing'):
+            self.api.forward_messages(1, 2, [10, 10])
+
+    def test_forward_messages_without_forum_topic_uses_no_topic(self):
+        self.api.forward_messages(1, 2, [10], send_copy=False)
+
+        self.assertEqual(
+            {
+                '@type': 'forwardMessages',
+                'chat_id': 1,
+                'topic_id': None,
+                'from_chat_id': 2,
+                'message_ids': [10],
+                'options': {},
+                'send_copy': False,
+                'remove_caption': False,
+            },
+            self.client.query,
+        )

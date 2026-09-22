@@ -852,6 +852,13 @@ class TelegramRuntime:
             self._remember_sent_message(message_id)
         return result
 
+    async def forward_messages(self, *args: Any, **kwargs: Any) -> dict:
+        result = await self.call('forward_messages', *args, **kwargs)
+        for message in result.get('messages') or []:
+            if message and message.get('id') is not None:
+                self._remember_sent_message(message['id'])
+        return result
+
     async def call(self, method: str, *args: Any, **kwargs: Any) -> dict:
         if not self.client or not self.client.is_enabled:
             raise TelegramMCPError('TDLib client is not running')

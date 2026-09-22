@@ -666,15 +666,41 @@ class API(BaseAPI):
         send_copy: bool = False,
         remove_caption: bool = False,
         only_preview: bool = False,  # deprecated  # noqa
+        forum_topic_id: Optional[int] = None,
     ):
         """Запрос на пересылку сообщения из одного чата в другой
 
-        message_thread_id - не используется, оставлено для обратной совместимости
+        ``message_thread_id`` is kept for compatibility with older callers, but
+        TDLib's ``forwardMessages`` only supports forum topics. Use
+        ``forum_topic_id`` for a forum destination.
         """
+        if message_thread_id is not None:
+            raise ValueError(
+                'message_thread_id is not supported by forwardMessages; '
+                'use forum_topic_id for forum topics'
+            )
+        if forum_topic_id is not None:
+            topic_id = {
+                '@type': 'messageTopicForum',
+                'forum_topic_id': forum_topic_id,
+            }
+        else:
+            topic_id = None
+
+        if not 1 <= len(message_ids) <= 100:
+            raise ValueError('forwardMessages requires between 1 and 100 message IDs')
+        if any(
+            not isinstance(message_id, int) or message_id < 1
+            for message_id in message_ids
+        ):
+            raise ValueError('message IDs must be positive integers')
+        if any(left >= right for left, right in zip(message_ids, message_ids[1:])):
+            raise ValueError('message IDs must be strictly increasing')
+
         return self.send_data(
             'forwardMessages',
             chat_id=chat_id,
-            topic_id=None,
+            topic_id=topic_id,
             from_chat_id=from_chat_id,
             message_ids=message_ids,
             options=_get_send_message_options(

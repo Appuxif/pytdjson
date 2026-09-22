@@ -92,6 +92,9 @@ class RuntimeStub:
     async def send_message(self, *args, **kwargs):
         return await self.call('send_message', *args, **kwargs)
 
+    async def forward_messages(self, *args, **kwargs):
+        return await self.call('forward_messages', *args, **kwargs)
+
     async def request_message_transcript(self, chat_id, message_id):
         return {
             'status': 'pending',
@@ -252,6 +255,23 @@ class RuntimeStub:
                     'text': {'text': kwargs['text']},
                 },
             }
+        if method == 'forward_messages':
+            return {
+                '@type': 'messages',
+                'messages': [
+                    {
+                        'id': 101,
+                        'chat_id': args[0],
+                        'date': 123,
+                        'is_outgoing': True,
+                        'content': {
+                            '@type': 'messageText',
+                            'text': {'text': 'forwarded'},
+                        },
+                    },
+                    None,
+                ],
+            }
         raise AssertionError(method)
 
 
@@ -269,7 +289,7 @@ class ServerTestCase(TestCase):
             )
             tools = asyncio.run(create_server(settings).list_tools())
 
-        self.assertEqual(34, len(tools))
+        self.assertEqual(35, len(tools))
         tool_names = [tool.name for tool in tools]
         self.assertNotIn('view_messages', tool_names)
         self.assertIn('send_message', tool_names)
@@ -280,6 +300,7 @@ class ServerTestCase(TestCase):
             'unsubscribe_from_updates',
             'commit_updates',
             'send_message',
+            'forward_messages',
             'request_message_transcript',
         }
         self.assertTrue(
@@ -292,6 +313,9 @@ class ServerTestCase(TestCase):
         send_tool = next(tool for tool in tools if tool.name == 'send_message')
         self.assertFalse(send_tool.annotations.read_only_hint)
         self.assertFalse(send_tool.annotations.idempotent_hint)
+        forward_tool = next(tool for tool in tools if tool.name == 'forward_messages')
+        self.assertFalse(forward_tool.annotations.read_only_hint)
+        self.assertFalse(forward_tool.annotations.idempotent_hint)
         history = next(tool for tool in tools if tool.name == 'get_chat_history')
         self.assertIn('oldest message ID', history.description)
         topic_history = next(
@@ -625,6 +649,137 @@ class ServerTestCase(TestCase):
             ),
             runtime.calls[-1],
         )
+
+    def test_forward_messages_is_denied_when_destination_is_not_allowlisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            with self.assertRaises(ToolError) as error:
+                asyncio.run(
+                    create_server(settings, runtime).call_tool(
+                        'forward_messages',
+                        {
+                            'from_chat_id': 20,
+                            'message_ids': [1],
+                            'to_chat_id': 10,
+                            'send_copy': True,
+                        },
+                    )
+                )
+
+        self.assertIn('not allowed', str(error.exception))
+        self.assertEqual([], runtime.calls)
+
+    def test_forward_messages_uses_allowlist_topic_and_reports_partial_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                    'PYTDJSON_ALLOW_SEND_TO_CHATS': '10',
+                }
+            )
+            runtime = RuntimeStub()
+            result = asyncio.run(
+                create_server(settings, runtime).call_tool(
+                    'forward_messages',
+                    {
+                        'from_chat_id': 20,
+                        'message_ids': [1, 2],
+                        'to_chat_id': 10,
+                        'send_copy': True,
+                        'forum_topic_id': 7,
+                        'remove_caption': True,
+                    },
+                )
+            )
+
+        payload = json.loads(result.content[0].text)
+        self.assertEqual(
+            [101, None], [item['id'] if item else None for item in payload['messages']]
+        )
+        self.assertEqual([2], payload['failed_message_ids'])
+        self.assertEqual(1, payload['forwarded_count'])
+        self.assertEqual(1, payload['failed_count'])
+        self.assertEqual(
+            (
+                'forward_messages',
+                (10, 20, [1, 2]),
+                {
+                    'forum_topic_id': 7,
+                    'send_copy': True,
+                    'remove_caption': True,
+                },
+            ),
+            runtime.calls[-1],
+        )
+
+    def test_forward_messages_rejects_non_increasing_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                    'PYTDJSON_ALLOW_SEND_TO_CHATS': '10',
+                }
+            )
+            runtime = RuntimeStub()
+            with self.assertRaises(ToolError) as error:
+                asyncio.run(
+                    create_server(settings, runtime).call_tool(
+                        'forward_messages',
+                        {
+                            'from_chat_id': 20,
+                            'message_ids': [2, 1],
+                            'to_chat_id': 10,
+                            'send_copy': True,
+                        },
+                    )
+                )
+
+        self.assertIn('strictly increasing', str(error.exception))
+        self.assertEqual([], runtime.calls)
+
+    def test_forward_messages_requires_explicit_send_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                    'PYTDJSON_ALLOW_SEND_TO_CHATS': '10',
+                }
+            )
+            runtime = RuntimeStub()
+            with self.assertRaises(ToolError):
+                asyncio.run(
+                    create_server(settings, runtime).call_tool(
+                        'forward_messages',
+                        {
+                            'from_chat_id': 20,
+                            'message_ids': [1],
+                            'to_chat_id': 10,
+                        },
+                    )
+                )
+
+        self.assertEqual([], runtime.calls)
 
     def test_get_chats_returns_compact_chat_objects(self):
         with tempfile.TemporaryDirectory() as directory:

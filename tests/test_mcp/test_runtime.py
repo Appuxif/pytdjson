@@ -3,7 +3,7 @@ import threading
 import tempfile
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from telegram.mcp.runtime import TelegramRuntime, _UpdateBuffer, _create_mcp_client
 
@@ -118,6 +118,33 @@ class RuntimeTestCase(TestCase):
 
         self.assertEqual(1, updates[0]['message']['id'])
         self.assertFalse(timed_out)
+
+    def test_forwarded_message_ids_are_ignored_in_update_buffer(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            runtime.call = AsyncMock(
+                return_value={
+                    '@type': 'messages',
+                    'messages': [
+                        {'id': 101, 'chat_id': 10},
+                        None,
+                    ],
+                }
+            )
+            result = await runtime.forward_messages(
+                10,
+                20,
+                [1, 2],
+                send_copy=True,
+            )
+            return result, runtime.call.await_args, runtime._ignored_message_ids
+
+        result, call, ignored_ids = asyncio.run(exercise())
+
+        self.assertEqual(2, len(result['messages']))
+        self.assertEqual((10, 20, [1, 2]), call.args[1:])
+        self.assertEqual({'send_copy': True}, call.kwargs)
+        self.assertEqual({101}, ignored_ids)
 
     def test_update_buffer_is_bounded(self):
         buffer = _UpdateBuffer(maxlen=2)

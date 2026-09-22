@@ -42,6 +42,9 @@ CURSOR = Annotated[int, Field(ge=0)]
 TEXT_CURSOR = Annotated[str, Field(max_length=4096)]
 MESSAGE_TEXT = Annotated[str, Field(min_length=1, max_length=4096)]
 MESSAGE_ID = Annotated[int, Field(ge=1)]
+FORWARD_MESSAGE_IDS = Annotated[
+    list[Annotated[int, Field(ge=1)]], Field(min_length=1, max_length=100)
+]
 FILE_ID = Annotated[int, Field(ge=1)]
 EVENT_TYPES = Annotated[list[str], Field(min_length=1, max_length=50)]
 TOPIC_IDS = Annotated[list[int], Field(min_length=1, max_length=200)]
@@ -761,6 +764,71 @@ def create_server(
                 reply_to_message_id=reply_to_message_id,
             )
         )
+
+    @mcp.tool(annotations=SEND)
+    async def forward_messages(
+        from_chat_id: CHAT_ID,
+        message_ids: FORWARD_MESSAGE_IDS,
+        to_chat_id: CHAT_ID,
+        send_copy: bool,
+        forum_topic_id: MESSAGE_ID | None = None,
+        remove_caption: bool = False,
+    ) -> dict:
+        """Forward or copy 1–100 messages to an explicitly allowlisted chat.
+
+        ``send_copy`` is required so the agent must explicitly choose whether
+        to preserve the original forwarding attribution. Message IDs must be
+        strictly increasing. ``forum_topic_id`` targets a forum topic; ordinary
+        non-forum message threads are not supported by TDLib forwarding.
+        Telegram may reject individual messages, for example protected content.
+        Such failures are returned in ``failed_message_ids`` while successful
+        messages remain in source order.
+        """
+        if (
+            not settings.mcp_allow_send_to_all_chats
+            and to_chat_id not in settings.mcp_allowed_send_to_chats
+        ):
+            raise ToolError(
+                f'sending messages to chat {to_chat_id} is not allowed; '
+                'configure PYTDJSON_ALLOW_SEND_TO_CHATS'
+            )
+        if any(left >= right for left, right in zip(message_ids, message_ids[1:])):
+            raise ToolError('message_ids must be strictly increasing')
+
+        result = await runtime.forward_messages(
+            to_chat_id,
+            from_chat_id,
+            message_ids,
+            forum_topic_id=forum_topic_id,
+            send_copy=send_copy,
+            remove_caption=remove_caption,
+        )
+        returned_messages = list(result.get('messages') or [])
+        if len(returned_messages) < len(message_ids):
+            returned_messages.extend(
+                [None] * (len(message_ids) - len(returned_messages))
+            )
+        projected_messages = [
+            projection.message(message) if message is not None else None
+            for message in returned_messages[: len(message_ids)]
+        ]
+        failed_message_ids = [
+            message_id
+            for message_id, message in zip(message_ids, returned_messages)
+            if message is None
+        ]
+        return {
+            'from_chat_id': from_chat_id,
+            'to_chat_id': to_chat_id,
+            'message_ids': message_ids,
+            'send_copy': send_copy,
+            'forum_topic_id': forum_topic_id,
+            'remove_caption': remove_caption,
+            'messages': projected_messages,
+            'failed_message_ids': failed_message_ids,
+            'forwarded_count': len(message_ids) - len(failed_message_ids),
+            'failed_count': len(failed_message_ids),
+        }
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_message_link(

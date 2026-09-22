@@ -54,3 +54,53 @@ Add coverage for:
 - Search and context tools are read-only.
 - Existing tool names and response fields remain backward compatible.
 - The work should be split into small commits, beginning with discovery/search and context retrieval.
+
+## Message forwarding through MCP
+
+### Goal
+
+Add a safe `forward_messages` tool that lets an agent forward or copy messages between Telegram chats while preserving message order, supporting forum topics, enforcing the existing send allowlist, and reporting per-message failures.
+
+### API and TDLib integration
+
+- Extend the existing `API.forward_messages` wrapper with `forum_topic_id`.
+- Encode a forum destination as TDLib's `messageTopicForum`.
+- Keep the existing wrapper signature compatible for callers that already pass `message_thread_id`, but stop silently ignoring it; return a clear error because ordinary message threads are not supported by TDLib's `forwardMessages` request.
+- Preserve support for TDLib's `send_copy` and `remove_caption` flags.
+- Keep TDLib's returned message order and nullable entries so protected or otherwise unforwardable messages can be identified.
+- Validate that the batch contains 1–100 message IDs in strictly increasing order before making the TDLib request.
+
+### MCP tool
+
+Add a write-annotated `forward_messages` tool with:
+
+- `from_chat_id`: source chat;
+- `message_ids`: 1–100 strictly increasing source message IDs;
+- `to_chat_id`: destination chat;
+- required `send_copy`: explicit choice between forwarding and copying;
+- optional `forum_topic_id`: forum topic in the destination;
+- optional `remove_caption`.
+
+Only the destination chat must be present in `PYTDJSON_ALLOW_SEND_TO_CHATS` (or be covered by `*`), matching `send_message` policy. Reject the request before contacting Telegram when the destination is not allowed, the batch is invalid, or conflicting thread parameters are supplied.
+
+Return a compact result containing the source and destination IDs, the requested message IDs, the projected forwarded messages in source order, `failed_message_ids`, and forwarded/failed counts. A `null` projected message is retained at its original position when TDLib reports a per-message failure.
+
+### Update-buffer behavior
+
+Remember every successfully created destination message as an outgoing message in the runtime's existing ignored-message state. This prevents the agent's own forwarded messages from being treated as incoming work by `poll_updates`, including partial-success batches, and keeps the behavior consistent with `send_message`.
+
+### Documentation and tests
+
+- Document the new tool, the destination allowlist, the explicit `send_copy` requirement, the 100-message limit, forum-topic support, and partial-failure behavior in the MCP README.
+- Test exact TDLib request construction with and without a forum topic.
+- Test rejection of unsupported legacy message-thread forwarding and invalid/non-increasing batches.
+- Test destination allowlist enforcement and the required `send_copy` parameter at the MCP layer.
+- Test forwarding with partial TDLib results and verify that all successful destination IDs are added to the ignored outgoing-message state.
+- Run the full unit-test suite, formatting checks, and `git diff --check`.
+
+### Scope boundaries
+
+- Do not inspect or modify TDLib's SQLite database directly.
+- Do not add preflight history requests; TDLib remains the source of truth for whether each message can be forwarded or copied.
+- Do not add multi-agent routing or source-chat permissions beyond the existing destination send policy.
+- Do not commit or push until the implementation and tests have been reviewed.

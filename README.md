@@ -29,7 +29,8 @@ Launch tests
 uses the same TDLib session database as the Python wrapper. It supports stdio
 and Streamable HTTP transports, and exposes compact summaries for chats,
 messages, users, groups, links, and local statistics; it doesn't send messages
-or mark them as read.
+or mark them as read. Forum-aware read tools list forum topics, read topic
+history, and read reply-thread history.
 
 Install it from a release tag with the optional extra:
 

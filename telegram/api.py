@@ -208,6 +208,78 @@ class API(BaseAPI):
             only_local=only_local,
         )
 
+    def get_forum_topics(
+        self,
+        chat_id: int,
+        query: str = '',
+        offset_date: int = 0,
+        offset_message_id: int = 0,
+        offset_forum_topic_id: int = 0,
+        limit: int = 100,
+    ):
+        """Запрашивает список форумных топиков чата"""
+        return self.send_data(
+            'getForumTopics',
+            chat_id=chat_id,
+            query=query,
+            offset_date=offset_date,
+            offset_message_id=offset_message_id,
+            offset_forum_topic_id=offset_forum_topic_id,
+            limit=limit,
+        )
+
+    def get_forum_topic(self, chat_id: int, forum_topic_id: int):
+        """Запрашивает информацию о форумном топике"""
+        return self.send_data(
+            'getForumTopic',
+            chat_id=chat_id,
+            forum_topic_id=forum_topic_id,
+        )
+
+    def get_forum_topic_history(
+        self,
+        chat_id: int,
+        forum_topic_id: int,
+        limit: int = 100,
+        from_message_id: int = 0,
+        offset: int = 0,
+    ):
+        """Запрашивает историю форумного топика"""
+        return self.send_data(
+            'getForumTopicHistory',
+            chat_id=chat_id,
+            forum_topic_id=forum_topic_id,
+            from_message_id=from_message_id,
+            offset=offset,
+            limit=limit,
+        )
+
+    def get_message_thread(self, chat_id: int, message_id: int):
+        """Запрашивает информацию о ветке ответов на сообщение"""
+        return self.send_data(
+            'getMessageThread',
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+
+    def get_message_thread_history(
+        self,
+        chat_id: int,
+        message_id: int,
+        limit: int = 100,
+        from_message_id: int = 0,
+        offset: int = 0,
+    ):
+        """Запрашивает историю ветки ответов на сообщение"""
+        return self.send_data(
+            'getMessageThreadHistory',
+            chat_id=chat_id,
+            message_id=message_id,
+            from_message_id=from_message_id,
+            offset=offset,
+            limit=limit,
+        )
+
     def get_web_page_instant_view(self, url: str, only_local: bool = False):
         """Use this method to request instant preview of a webpage.
         Returns error with 404 if there is no preview for this webpage.

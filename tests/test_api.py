@@ -32,3 +32,89 @@ class ApiTestCase(TestCase):
             },
             self.client.query,
         )
+
+    def test_forum_topics_uses_tdlib_pagination_fields(self):
+        self.api.get_forum_topics(
+            1,
+            query='residence',
+            offset_date=10,
+            offset_message_id=20,
+            offset_forum_topic_id=30,
+            limit=40,
+        )
+
+        self.assertEqual(
+            {
+                '@type': 'getForumTopics',
+                'chat_id': 1,
+                'query': 'residence',
+                'offset_date': 10,
+                'offset_message_id': 20,
+                'offset_forum_topic_id': 30,
+                'limit': 40,
+            },
+            self.client.query,
+        )
+
+    def test_forum_topic_history_uses_topic_and_message_pagination(self):
+        self.api.get_forum_topic_history(
+            1,
+            2,
+            limit=40,
+            from_message_id=30,
+            offset=-4,
+        )
+
+        self.assertEqual(
+            {
+                '@type': 'getForumTopicHistory',
+                'chat_id': 1,
+                'forum_topic_id': 2,
+                'from_message_id': 30,
+                'offset': -4,
+                'limit': 40,
+            },
+            self.client.query,
+        )
+
+    def test_forum_topic_and_message_thread_metadata_requests(self):
+        self.api.get_forum_topic(1, 2)
+        self.assertEqual(
+            {
+                '@type': 'getForumTopic',
+                'chat_id': 1,
+                'forum_topic_id': 2,
+            },
+            self.client.query,
+        )
+
+        self.api.get_message_thread(1, 2)
+        self.assertEqual(
+            {
+                '@type': 'getMessageThread',
+                'chat_id': 1,
+                'message_id': 2,
+            },
+            self.client.query,
+        )
+
+    def test_message_thread_history_uses_root_message_and_pagination(self):
+        self.api.get_message_thread_history(
+            1,
+            2,
+            limit=40,
+            from_message_id=30,
+            offset=-4,
+        )
+
+        self.assertEqual(
+            {
+                '@type': 'getMessageThreadHistory',
+                'chat_id': 1,
+                'message_id': 2,
+                'from_message_id': 30,
+                'offset': -4,
+                'limit': 40,
+            },
+            self.client.query,
+        )

@@ -10,6 +10,39 @@ def _sender(value: Optional[dict]) -> Optional[dict]:
     return result
 
 
+def _topic_id(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    result = {'type': value.get('@type')}
+    result.update(
+        {
+            key: value[key]
+            for key in (
+                'message_thread_id',
+                'forum_topic_id',
+                'direct_messages_chat_topic_id',
+                'saved_messages_topic_id',
+            )
+            if key in value
+        }
+    )
+    return result
+
+
+def _reply_to(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    result = {'type': value.get('@type')}
+    result.update(
+        {
+            key: value[key]
+            for key in ('chat_id', 'message_id', 'story_poster_chat_id', 'story_id')
+            if key in value
+        }
+    )
+    return result
+
+
 def message(value: Optional[dict]) -> Optional[dict]:
     if not value:
         return None
@@ -22,6 +55,8 @@ def message(value: Optional[dict]) -> Optional[dict]:
         'date': value.get('date'),
         'edit_date': value.get('edit_date'),
         'is_outgoing': value.get('is_outgoing'),
+        'topic_id': _topic_id(value.get('topic_id')),
+        'reply_to': _reply_to(value.get('reply_to')),
         'content_type': content.get('@type'),
         'text': text.get('text') if isinstance(text, dict) else None,
     }
@@ -60,6 +95,87 @@ def group(value: dict) -> dict:
         key: value.get(key)
         for key in ('id', 'member_count', 'description', 'is_channel', 'is_forum')
         if key in value
+    }
+
+
+def forum_topic_info(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    icon = value.get('icon') or {}
+    return {
+        'chat_id': value.get('chat_id'),
+        'forum_topic_id': value.get('forum_topic_id'),
+        'name': value.get('name'),
+        'icon': {
+            'color': icon.get('color'),
+            'custom_emoji_id': icon.get('custom_emoji_id'),
+        },
+        'creation_date': value.get('creation_date'),
+        'creator': _sender(value.get('creator_id')),
+        'is_general': value.get('is_general'),
+        'is_outgoing': value.get('is_outgoing'),
+        'is_closed': value.get('is_closed'),
+        'is_hidden': value.get('is_hidden'),
+        'is_name_implicit': value.get('is_name_implicit'),
+    }
+
+
+def forum_topic(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    result = forum_topic_info(value.get('info')) or {}
+    result.update(
+        {
+            'last_message': message(value.get('last_message')),
+            'order': value.get('order'),
+            'is_pinned': value.get('is_pinned'),
+            'unread_count': value.get('unread_count'),
+            'last_read_inbox_message_id': value.get('last_read_inbox_message_id'),
+            'last_read_outbox_message_id': value.get('last_read_outbox_message_id'),
+            'unread_mention_count': value.get('unread_mention_count'),
+            'unread_reaction_count': value.get('unread_reaction_count'),
+            'unread_poll_vote_count': value.get('unread_poll_vote_count'),
+        }
+    )
+    return result
+
+
+def forum_topics(value: dict) -> dict:
+    return {
+        'total_count': value.get('total_count'),
+        'topics': [forum_topic(item) for item in value.get('topics', [])],
+        'next_offset': {
+            'date': value.get('next_offset_date'),
+            'message_id': value.get('next_offset_message_id'),
+            'forum_topic_id': value.get('next_offset_forum_topic_id'),
+        },
+    }
+
+
+def _reply_info(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    recent_repliers = value.get('recent_replier_ids')
+    if recent_repliers is None:
+        recent_repliers = value.get('recent_repliers')
+    return {
+        'reply_count': value.get('reply_count'),
+        'recent_repliers': [_sender(item) for item in (recent_repliers or [])],
+        'last_read_inbox_message_id': value.get('last_read_inbox_message_id'),
+        'last_read_outbox_message_id': value.get('last_read_outbox_message_id'),
+        'last_message_id': value.get('last_message_id'),
+    }
+
+
+def message_thread(value: Optional[dict]) -> Optional[dict]:
+    if not value:
+        return None
+    return {
+        'chat_id': value.get('chat_id'),
+        'message_thread_id': value.get('message_thread_id'),
+        'reply_info': _reply_info(value.get('reply_info')),
+        'unread_message_count': value.get('unread_message_count'),
+        'messages': [message(item) for item in value.get('messages', [])],
     }
 
 

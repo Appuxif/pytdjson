@@ -32,6 +32,14 @@ class RuntimeStub:
                 'type': {'@type': 'chatTypePrivate'},
                 'unread_count': 0,
             }
+        if method == 'get_forum_topics':
+            return {
+                'total_count': 1,
+                'topics': [],
+                'next_offset_date': 0,
+                'next_offset_message_id': 0,
+                'next_offset_forum_topic_id': 0,
+            }
         raise AssertionError(method)
 
 
@@ -49,11 +57,15 @@ class ServerTestCase(TestCase):
             )
             tools = asyncio.run(create_server(settings).list_tools())
 
-        self.assertEqual(15, len(tools))
+        self.assertEqual(20, len(tools))
         self.assertNotIn('view_messages', [tool.name for tool in tools])
         self.assertTrue(all(tool.annotations.read_only_hint for tool in tools))
         history = next(tool for tool in tools if tool.name == 'get_chat_history')
         self.assertIn('oldest message ID', history.description)
+        topic_history = next(
+            tool for tool in tools if tool.name == 'get_forum_topic_history'
+        )
+        self.assertIn('oldest returned message ID', topic_history.description)
 
     def test_tool_returns_structured_compact_result(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -109,4 +121,28 @@ class ServerTestCase(TestCase):
                 },
             ],
             payload['chats'],
+        )
+
+    def test_get_forum_topics_returns_compact_topic_list(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            result = asyncio.run(
+                create_server(settings, RuntimeStub()).call_tool(
+                    'get_forum_topics', {'chat_id': 1}
+                )
+            )
+
+        payload = json.loads(result.content[0].text)
+        self.assertEqual(1, payload['total_count'])
+        self.assertEqual(
+            {'date': 0, 'message_id': 0, 'forum_topic_id': 0},
+            payload['next_offset'],
         )

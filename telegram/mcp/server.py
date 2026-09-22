@@ -101,6 +101,93 @@ def create_server(
         return projection.history(result)
 
     @mcp.tool(annotations=READ_ONLY)
+    async def get_forum_topics(
+        chat_id: int,
+        query: str = '',
+        offset_date: int = 0,
+        offset_message_id: int = 0,
+        offset_forum_topic_id: int = 0,
+        limit: LIMIT = 100,
+    ) -> dict:
+        """List native forum topics in a forum supergroup.
+
+        Use the returned ``next_offset`` values for the next page. Pass the
+        topic name in ``query`` to filter the list on Telegram's server.
+        """
+        result = await runtime.call(
+            'get_forum_topics',
+            chat_id,
+            query=query,
+            offset_date=offset_date,
+            offset_message_id=offset_message_id,
+            offset_forum_topic_id=offset_forum_topic_id,
+            limit=limit,
+        )
+        return projection.forum_topics(result)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_forum_topic(chat_id: int, forum_topic_id: int) -> dict:
+        """Get metadata and the latest message for one forum topic."""
+        return projection.forum_topic(
+            await runtime.call('get_forum_topic', chat_id, forum_topic_id)
+        )
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_forum_topic_history(
+        chat_id: int,
+        forum_topic_id: int,
+        limit: LIMIT = 100,
+        from_message_id: int = 0,
+        offset: int = 0,
+    ) -> dict:
+        """Get messages from one forum topic.
+
+        Results are newest-first. Start with ``from_message_id=0``. For the
+        next page, pass the oldest returned message ID with ``offset=0``.
+        Repeat the same request if Telegram returns a short page while it
+        loads history.
+        """
+        result = await runtime.call(
+            'get_forum_topic_history',
+            chat_id,
+            forum_topic_id,
+            limit=limit,
+            from_message_id=from_message_id,
+            offset=offset,
+        )
+        return projection.history(result)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_message_thread(chat_id: int, message_id: int) -> dict:
+        """Get metadata and starting messages for a message reply thread."""
+        return projection.message_thread(
+            await runtime.call('get_message_thread', chat_id, message_id)
+        )
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_message_thread_history(
+        chat_id: int,
+        message_id: int,
+        limit: LIMIT = 100,
+        from_message_id: int = 0,
+        offset: int = 0,
+    ) -> dict:
+        """Get messages replying to one message.
+
+        Results are newest-first. Start with ``from_message_id=0``. For the
+        next page, pass the oldest returned message ID with ``offset=0``.
+        """
+        result = await runtime.call(
+            'get_message_thread_history',
+            chat_id,
+            message_id,
+            limit=limit,
+            from_message_id=from_message_id,
+            offset=offset,
+        )
+        return projection.history(result)
+
+    @mcp.tool(annotations=READ_ONLY)
     async def get_message(chat_id: int, message_id: int) -> dict:
         """Get one message by chat and message ID."""
         return projection.message(

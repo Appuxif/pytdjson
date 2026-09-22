@@ -48,6 +48,11 @@ def message(value: Optional[dict]) -> Optional[dict]:
         return None
     content = value.get('content') or {}
     text = content.get('text') or content.get('caption') or {}
+    sticker = content.get('sticker') or {}
+    sticker_emoji = sticker.get('emoji')
+    text_value = text.get('text') if isinstance(text, dict) else None
+    if content.get('@type') == 'messageSticker' and text_value is None:
+        text_value = sticker_emoji
     return {
         'id': value.get('id'),
         'chat_id': value.get('chat_id'),
@@ -58,7 +63,11 @@ def message(value: Optional[dict]) -> Optional[dict]:
         'topic_id': _topic_id(value.get('topic_id')),
         'reply_to': _reply_to(value.get('reply_to')),
         'content_type': content.get('@type'),
-        'text': text.get('text') if isinstance(text, dict) else None,
+        'text': text_value,
+        'sticker_emoji': sticker_emoji,
+        'sticker_id': sticker.get('id'),
+        'sticker_set_id': sticker.get('set_id'),
+        'sticker_is_premium': content.get('is_premium'),
     }
 
 

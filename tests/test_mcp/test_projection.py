@@ -51,6 +51,31 @@ class ProjectionTestCase(TestCase):
             result['reply_to'],
         )
 
+    def test_message_exposes_sticker_as_emoji_without_file_data(self):
+        result = projection.message(
+            {
+                'id': 2,
+                'chat_id': 1,
+                'content': {
+                    '@type': 'messageSticker',
+                    'is_premium': True,
+                    'sticker': {
+                        'id': 123,
+                        'set_id': 456,
+                        'emoji': '😂',
+                        'sticker': {'id': 789},
+                    },
+                },
+            }
+        )
+
+        self.assertEqual('😂', result['text'])
+        self.assertEqual('😂', result['sticker_emoji'])
+        self.assertEqual(123, result['sticker_id'])
+        self.assertEqual(456, result['sticker_set_id'])
+        self.assertTrue(result['sticker_is_premium'])
+        self.assertNotIn('sticker', result)
+
     def test_forum_topics_projection_keeps_topic_identity_and_cursor(self):
         result = projection.forum_topics(
             {

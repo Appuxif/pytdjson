@@ -299,10 +299,11 @@ def create_server(
         result = await runtime.call(
             'search_chats', query=query, limit=limit, on_server=on_server
         )
+        chat_ids = (result.get('chat_ids') or [])[:limit]
         chats = await asyncio.gather(
             *(
                 runtime.call('get_chat', chat_id)
-                for chat_id in result.get('chat_ids', [])
+                for chat_id in chat_ids
             )
         )
         return {
@@ -478,7 +479,10 @@ def create_server(
         pages_fetched = 0
         stalled = False
         while len(messages_by_id) < limit and pages_fetched < max_pages:
-            page_limit = min(100, limit - len(messages_by_id))
+            remaining = limit - len(messages_by_id)
+            # TDLib includes from_message_id in the next page, so request one
+            # extra item to account for the repeated boundary message.
+            page_limit = min(100, remaining + (1 if from_message_id else 0))
             result = await runtime.call(
                 'get_chat_history',
                 chat_id,
@@ -530,7 +534,7 @@ def create_server(
         max_date: int = 0,
         limit: LIMIT = 100,
         cursor: TEXT_CURSOR = '',
-        chat_list: str | None = 'chatListMain',
+        chat_list: str | None = None,
         filter: str = 'all',
         include_sender_details: bool = True,
     ) -> dict:

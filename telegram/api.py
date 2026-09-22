@@ -198,8 +198,16 @@ class API(BaseAPI):
         type_filter: Optional[str] = None,
     ):
         """Search known chats, or public chats on Telegram's servers."""
+        if on_server:
+            return self.send_data(
+                'searchPublicChats',
+                query=query,
+                type_filter=(
+                    {'@type': type_filter} if type_filter is not None else None
+                ),
+            )
         return self.send_data(
-            'searchChatsOnServer' if on_server else 'searchChats',
+            'searchChats',
             query=query,
             type_filter=({'@type': type_filter} if type_filter is not None else None),
             limit=limit,

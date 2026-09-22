@@ -177,12 +177,12 @@ def _update_matches_subscription(update: dict, subscriptions: dict[int, dict]) -
     subscription = subscriptions.get(chat_id)
     if subscription is None:
         return False
-    if update.get('@type') == 'mcpMessageTranscription':
-        topic_ids = subscription.get('topic_ids') or set()
-        return not topic_ids or _update_topic_id(update) in topic_ids
     event_types = subscription.get('event_types') or DEFAULT_UPDATE_EVENT_TYPES
     if '*' not in event_types and update.get('@type') not in event_types:
         return False
+    if update.get('@type') == 'mcpMessageTranscription':
+        topic_ids = subscription.get('topic_ids') or set()
+        return not topic_ids or _update_topic_id(update) in topic_ids
     topic_ids = subscription.get('topic_ids') or set()
     return not topic_ids or _update_topic_id(update) in topic_ids
 
@@ -499,7 +499,7 @@ class _PersistentState:
                 stale_rows = list(
                     self.connection.execute(
                         'SELECT chat_id, message_id FROM mcp_ignored_messages '
-                        'ORDER BY sequence ASC LIMIT -1 OFFSET ?',
+                        'ORDER BY sequence DESC LIMIT -1 OFFSET ?',
                         (maxlen,),
                     )
                 )

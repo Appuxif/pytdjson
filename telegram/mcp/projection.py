@@ -374,6 +374,16 @@ def update(value: Optional[dict]) -> Optional[dict]:
         if key in value:
             result[key] = value[key]
 
+    if 'actor_id' in value:
+        result['actor_id'] = _sender(value.get('actor_id'))
+    if 'interaction_info' in value:
+        result['interaction_info'] = _interaction(value.get('interaction_info'))
+    for key in ('old_reaction_types', 'new_reaction_types'):
+        if key in value:
+            result[key] = [
+                _reaction_type(item) for item in (value.get(key) or [])
+            ]
+
     if 'message' in value:
         result['message'] = message(value['message'])
     if 'chat' in value:

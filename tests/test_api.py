@@ -69,7 +69,7 @@ class ApiTestCase(TestCase):
         )
 
         self.api.search_chats('Darina', limit=7, on_server=True)
-        self.assertEqual('searchChatsOnServer', self.client.query['@type'])
+        self.assertEqual('searchPublicChats', self.client.query['@type'])
 
     def test_search_messages_builds_chat_and_global_requests(self):
         self.api.search_chat_messages(

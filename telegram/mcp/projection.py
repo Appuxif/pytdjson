@@ -62,6 +62,55 @@ def message(value: Optional[dict]) -> Optional[dict]:
     }
 
 
+def _update_chat_id(value: dict) -> Optional[int]:
+    if value.get('chat_id') is not None:
+        return value['chat_id']
+    for key in ('message', 'chat'):
+        nested = value.get(key) or {}
+        if key == 'message' and nested.get('chat_id') is not None:
+            return nested['chat_id']
+        if key == 'chat' and nested.get('id') is not None:
+            return nested['id']
+    return None
+
+
+def update(value: Optional[dict]) -> Optional[dict]:
+    """Project a TDLib update into a compact event for MCP clients."""
+    if not value:
+        return None
+
+    result = {
+        'type': value.get('@type'),
+        'chat_id': _update_chat_id(value),
+    }
+    for key in (
+        'date',
+        'message_id',
+        'message_ids',
+        'user_id',
+        'supergroup_id',
+        'basic_group_id',
+        'unread_count',
+        'last_read_inbox_message_id',
+        'last_read_outbox_message_id',
+        'is_deleted',
+        'is_pinned',
+    ):
+        if key in value:
+            result[key] = value[key]
+
+    if 'message' in value:
+        result['message'] = message(value['message'])
+    if 'chat' in value:
+        result['chat'] = chat(value['chat'], include_last_message=False)
+    if 'error' in value:
+        error = value['error'] or {}
+        result['error'] = {
+            key: error[key] for key in ('code', 'message') if key in error
+        }
+    return result
+
+
 def user(value: dict) -> dict:
     usernames = value.get('usernames') or {}
     return {

@@ -9,15 +9,77 @@ from telegram.mcp.config import load_settings
 from telegram.mcp.server import create_server
 
 
+def awaitable_call(server, name, arguments):
+    return asyncio.run(server.call_tool(name, arguments))
+
+
 class RuntimeStub:
     def __init__(self):
         self.calls = []
+        self.subscribed_chat_ids = set()
+        self.poll_calls = []
 
     async def start(self):
         pass
 
     async def stop(self):
         pass
+
+    async def subscribe_for_updates(self, chat_ids):
+        added = chat_ids - self.subscribed_chat_ids
+        self.subscribed_chat_ids.update(chat_ids)
+        return {
+            'subscribed_chat_ids': sorted(self.subscribed_chat_ids),
+            'added_chat_ids': sorted(added),
+        }
+
+    async def unsubscribe_from_updates(self, chat_ids):
+        removed = chat_ids & self.subscribed_chat_ids
+        self.subscribed_chat_ids.difference_update(chat_ids)
+        return {
+            'subscribed_chat_ids': sorted(self.subscribed_chat_ids),
+            'removed_chat_ids': sorted(removed),
+        }
+
+    def update_subscription(self):
+        return {
+            'subscribed_chat_ids': sorted(self.subscribed_chat_ids),
+            'buffer_size': 0,
+            'buffer_limit': 2000,
+            'oldest_cursor': 0,
+            'next_cursor': 0,
+        }
+
+    async def poll_updates(self, timeout, cursor=None):
+        self.poll_calls.append((timeout, cursor))
+        return (
+            {
+                '@type': 'updateNewMessage',
+                'message': {
+                    'id': 77,
+                    'chat_id': 10,
+                    'date': 123,
+                    'is_outgoing': False,
+                    'content': {
+                        '@type': 'messageText',
+                        'text': {'text': 'incoming'},
+                    },
+                },
+            },
+            5,
+            False,
+            False,
+        )
+
+    async def commit_updates(self, cursor):
+        return {
+            'committed_through': cursor,
+            'removed_count': 1,
+            **self.update_subscription(),
+        }
+
+    async def send_message(self, *args, **kwargs):
+        return await self.call('send_message', *args, **kwargs)
 
     async def call(self, method, *args, **kwargs):
         self.calls.append((method, args, kwargs))
@@ -84,15 +146,23 @@ class ServerTestCase(TestCase):
             )
             tools = asyncio.run(create_server(settings).list_tools())
 
-        self.assertEqual(22, len(tools))
+        self.assertEqual(27, len(tools))
         tool_names = [tool.name for tool in tools]
         self.assertNotIn('view_messages', tool_names)
         self.assertIn('send_message', tool_names)
+        self.assertIn('poll_updates', tool_names)
+        self.assertIn('check_updates_subscription', tool_names)
+        local_state_tools = {
+            'subscribe_for_updates',
+            'unsubscribe_from_updates',
+            'commit_updates',
+            'send_message',
+        }
         self.assertTrue(
             all(
                 tool.annotations.read_only_hint
                 for tool in tools
-                if tool.name != 'send_message'
+                if tool.name not in local_state_tools
             )
         )
         send_tool = next(tool for tool in tools if tool.name == 'send_message')
@@ -104,6 +174,80 @@ class ServerTestCase(TestCase):
             tool for tool in tools if tool.name == 'get_forum_topic_history'
         )
         self.assertIn('oldest returned message ID', topic_history.description)
+
+    def test_update_subscription_tools_manage_selected_chats(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            server = create_server(settings, runtime)
+            subscribed = awaitable_call(
+                server, 'subscribe_for_updates', {'chat_ids': [10, 20, 10]}
+            )
+            state = awaitable_call(server, 'check_updates_subscription', {})
+            unsubscribed = awaitable_call(
+                server, 'unsubscribe_from_updates', {'chat_ids': [10]}
+            )
+
+        subscribed_payload = json.loads(subscribed.content[0].text)
+        state_payload = json.loads(state.content[0].text)
+        unsubscribed_payload = json.loads(unsubscribed.content[0].text)
+        self.assertEqual([10, 20], subscribed_payload['subscribed_chat_ids'])
+        self.assertEqual([10, 20], state_payload['subscribed_chat_ids'])
+        self.assertEqual([20], unsubscribed_payload['subscribed_chat_ids'])
+
+    def test_poll_updates_fails_immediately_without_subscription(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            with self.assertRaises(ToolError) as error:
+                asyncio.run(
+                    create_server(settings, runtime).call_tool(
+                        'poll_updates', {'timeout': 300}
+                    )
+                )
+
+        self.assertIn('no update subscriptions configured', str(error.exception))
+        self.assertEqual([], runtime.poll_calls)
+
+    def test_poll_and_commit_updates_use_one_event_and_cursor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            server = create_server(settings, runtime)
+            awaitable_call(server, 'subscribe_for_updates', {'chat_ids': [10]})
+            polled = awaitable_call(server, 'poll_updates', {'timeout': 3, 'cursor': 2})
+            committed = awaitable_call(server, 'commit_updates', {'cursor': 5})
+
+        payload = json.loads(polled.content[0].text)
+        self.assertEqual(77, payload['update']['message']['id'])
+        self.assertEqual(5, payload['next_cursor'])
+        self.assertFalse(payload['timed_out'])
+        self.assertEqual([(3, 2)], runtime.poll_calls)
+        self.assertEqual(1, json.loads(committed.content[0].text)['removed_count'])
 
     def test_tool_returns_structured_compact_result(self):
         with tempfile.TemporaryDirectory() as directory:

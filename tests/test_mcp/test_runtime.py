@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 
-from telegram.mcp.runtime import TelegramRuntime, _create_mcp_client
+from telegram.mcp.runtime import TelegramRuntime, _UpdateBuffer, _create_mcp_client
 
 
 class LoopStub:
@@ -18,6 +18,10 @@ class ClientStub:
         self._loop = LoopStub()
         self.login_thread = None
         self._stopped = threading.Event()
+        self.update_handlers = []
+
+    def add_update_handler(self, handler_type, handler):
+        self.update_handlers.append((handler_type, handler))
 
     def login(self, timeout):
         self.login_thread = threading.get_ident()
@@ -59,3 +63,78 @@ class RuntimeTestCase(TestCase):
 
         self.assertNotEqual(main_thread, client.login_thread)
         self.assertEqual([True], ready)
+        self.assertEqual(['*'], [item[0] for item in client.update_handlers])
+
+    def test_updates_require_subscription_and_commit_in_fifo_order(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(frozenset({10}))
+            runtime._record_update(
+                {'@type': 'updateNewMessage', 'message': {'chat_id': 20}}
+            )
+            runtime._record_update(
+                {'@type': 'updateNewMessage', 'message': {'chat_id': 10}}
+            )
+
+            update, cursor, timed_out, cursor_expired = await runtime.poll_updates(
+                timeout=0.01
+            )
+            committed = await runtime.commit_updates(cursor)
+            return update, cursor, timed_out, cursor_expired, committed
+
+        update, cursor, timed_out, cursor_expired, committed = asyncio.run(exercise())
+
+        self.assertEqual(10, update['message']['chat_id'])
+        self.assertEqual(1, cursor)
+        self.assertFalse(timed_out)
+        self.assertFalse(cursor_expired)
+        self.assertEqual(1, committed['removed_count'])
+        self.assertEqual(0, committed['buffer_size'])
+
+    def test_only_new_messages_are_buffered_and_sent_ids_are_ignored(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(frozenset({10}))
+            runtime._remember_sent_message(2)
+            self.assertEqual(2000, runtime._updates.events.maxlen)
+            runtime._record_update({'@type': 'updateChatLastMessage', 'chat_id': 10})
+            runtime._record_update(
+                {
+                    '@type': 'updateNewMessage',
+                    'message': {'id': 1, 'chat_id': 10, 'is_outgoing': True},
+                }
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateNewMessage',
+                    'message': {'id': 2, 'chat_id': 10, 'is_outgoing': True},
+                }
+            )
+            return await runtime.poll_updates(timeout=0.01)
+
+        update, _, timed_out, _ = asyncio.run(exercise())
+
+        self.assertEqual(1, update['message']['id'])
+        self.assertFalse(timed_out)
+
+    def test_update_buffer_is_bounded(self):
+        buffer = _UpdateBuffer(maxlen=2)
+        for chat_id in (10, 20, 30):
+            buffer.add({'chat_id': chat_id})
+
+        self.assertEqual(2, buffer.size)
+        self.assertEqual(1, buffer.oldest_cursor)
+        self.assertEqual(3, buffer.next_sequence)
+
+    def test_poll_updates_times_out_without_a_matching_event(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(frozenset({10}))
+            return await runtime.poll_updates(timeout=0.01)
+
+        update, cursor, timed_out, cursor_expired = asyncio.run(exercise())
+
+        self.assertIsNone(update)
+        self.assertEqual(0, cursor)
+        self.assertTrue(timed_out)
+        self.assertFalse(cursor_expired)

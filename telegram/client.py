@@ -357,7 +357,11 @@ class AsyncTelegram:
 
     async def _run_handlers(self, update: Dict[Any, Any]) -> None:
         update_type: str = update.get('@type', 'unknown')
-        for handler in self._update_handlers[update_type]:
+        handlers = [
+            *self._update_handlers[update_type],
+            *self._update_handlers['*'],
+        ]
+        for handler in handlers:
             await self.handler_workers_queue.put((handler, update))
 
     def add_message_handler(self, func: Callable) -> None:

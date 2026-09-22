@@ -61,6 +61,14 @@ Set `PYTDJSON_ALLOW_SEND_TO_CHATS=*` only when sending to every chat is
 intentional. The `send_message` tool supports ordinary messages, replies,
 non-forum message threads, and forum topics.
 
+For live updates, first call `subscribe_for_updates` with the chat IDs of
+interest. Calling `poll_updates` without any subscriptions returns an error
+immediately. Otherwise it waits for one update and returns a cursor. After
+processing the update, call `commit_updates` with that cursor.
+`check_updates_subscription` shows active subscriptions and the bounded
+in-memory buffer. `unsubscribe_from_updates` stops collecting updates and
+removes buffered events for those chats.
+
 For one shared local TDLib session used by multiple MCP clients, run the
 Streamable HTTP transport in a persistent terminal or service:
 

@@ -19,8 +19,17 @@ SEND = ToolAnnotations(
     idempotentHint=False,
     openWorldHint=True,
 )
+SUBSCRIPTION = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=True,
+)
 LIMIT = Annotated[int, Field(ge=1, le=100)]
 USER_IDS = Annotated[list[int], Field(min_length=1, max_length=200)]
+CHAT_ID = Annotated[int, Field(ne=0)]
+CHAT_IDS = Annotated[list[CHAT_ID], Field(min_length=1, max_length=200)]
+POLL_TIMEOUT = Annotated[float, Field(gt=0, le=300)]
+CURSOR = Annotated[int, Field(ge=0)]
 MESSAGE_TEXT = Annotated[str, Field(min_length=1, max_length=4096)]
 MESSAGE_ID = Annotated[int, Field(ge=1)]
 
@@ -102,6 +111,60 @@ def create_server(
         """Ask TDLib to load chats into its local cache."""
         await runtime.call('load_chats', limit=limit, chat_list=chat_list)
         return {'loaded': True}
+
+    @mcp.tool(annotations=SUBSCRIPTION)
+    async def subscribe_for_updates(chat_ids: CHAT_IDS) -> dict:
+        """Subscribe to live updates associated with the given chat IDs."""
+        return await runtime.subscribe_for_updates(frozenset(chat_ids))
+
+    @mcp.tool(annotations=SUBSCRIPTION)
+    async def unsubscribe_from_updates(chat_ids: CHAT_IDS) -> dict:
+        """Stop collecting live updates for the given chat IDs."""
+        return await runtime.unsubscribe_from_updates(frozenset(chat_ids))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def check_updates_subscription() -> dict:
+        """Show active update subscriptions and bounded buffer state."""
+        return runtime.update_subscription()
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def poll_updates(
+        timeout: POLL_TIMEOUT = 30.0,
+        cursor: CURSOR | None = None,
+    ) -> dict:
+        """Wait for updates from subscribed chats.
+
+        Raises an error immediately when no chat subscriptions are configured.
+        The call returns one oldest update or waits until ``timeout`` seconds
+        elapse. Pass the returned ``next_cursor`` to the next call to continue
+        without repeating the update. Use ``commit_updates`` after processing
+        it. Without a cursor, the retained buffer is read from its oldest
+        available event.
+        """
+        if not runtime.update_subscription()['subscribed_chat_ids']:
+            raise ToolError(
+                'no update subscriptions configured; call '
+                'subscribe_for_updates first'
+            )
+        update, next_cursor, timed_out, cursor_expired = await runtime.poll_updates(
+            timeout, cursor
+        )
+        state = runtime.update_subscription()
+        return {
+            'update': projection.update(update),
+            'timed_out': timed_out,
+            'cursor_expired': cursor_expired,
+            'next_cursor': next_cursor,
+            'subscribed_chat_ids': state['subscribed_chat_ids'],
+        }
+
+    @mcp.tool(annotations=SUBSCRIPTION)
+    async def commit_updates(cursor: CURSOR) -> dict:
+        """Remove all buffered updates through a processed cursor."""
+        try:
+            return await runtime.commit_updates(cursor)
+        except ValueError as error:
+            raise ToolError(str(error)) from error
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_chat_history(
@@ -252,8 +315,7 @@ def create_server(
                 'message_thread_id and forum_topic_id cannot be used together'
             )
         return projection.message(
-            await runtime.call(
-                'send_message',
+            await runtime.send_message(
                 chat_id,
                 text=text,
                 message_thread_id=message_thread_id,

@@ -203,6 +203,44 @@ class RuntimeTestCase(TestCase):
         self.assertEqual({'send_copy': True}, call.kwargs)
         self.assertEqual({(10, 101)}, ignored_ids)
 
+    def test_successful_send_maps_ignored_temporary_id_to_final_id(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(frozenset({10}), event_types={'*'})
+            runtime._remember_sent_message(10, -7)
+            runtime._record_update(
+                {
+                    '@type': 'updateMessageSendSucceeded',
+                    'old_message_id': -7,
+                    'message': {'id': 99, 'chat_id': 10, 'is_outgoing': True},
+                }
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateNewMessage',
+                    'message': {'id': 99, 'chat_id': 10, 'is_outgoing': True},
+                }
+            )
+            return runtime._updates.size, runtime._ignored_message_ids
+
+        size, ignored_ids = asyncio.run(exercise())
+
+        self.assertEqual(0, size)
+        self.assertIn((10, -7), ignored_ids)
+        self.assertIn((10, 99), ignored_ids)
+
+    def test_ignored_message_retention_evicts_oldest_ids(self):
+        runtime = TelegramRuntime(SimpleNamespace())
+        runtime._updates = _UpdateBuffer(maxlen=2)
+
+        for message_id in (1, 2, 3):
+            runtime._remember_sent_message(10, message_id)
+
+        self.assertEqual({(10, 2), (10, 3)}, runtime._ignored_message_ids)
+        self.assertEqual(
+            [(10, 2), (10, 3)], runtime._state.load(10)['ignored_message_ids']
+        )
+
     def test_update_buffer_is_bounded(self):
         buffer = _UpdateBuffer(maxlen=2)
         for chat_id in (10, 20, 30):
@@ -255,6 +293,64 @@ class RuntimeTestCase(TestCase):
 
         updates, _, timed_out, _ = asyncio.run(exercise())
         self.assertEqual([1, 3], [item['message']['id'] for item in updates])
+        self.assertFalse(timed_out)
+
+    def test_topic_filter_resolves_id_only_message_updates(self):
+        async def exercise():
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(
+                frozenset({10}),
+                event_types={'updateMessageReaction', 'updateMessageContent'},
+                topic_ids={7},
+            )
+            runtime._mcp_loop = asyncio.get_running_loop()
+
+            async def call(method, message_id, chat_id):
+                self.assertEqual('get_message', method)
+                self.assertEqual(10, chat_id)
+                return {
+                    'id': message_id,
+                    'chat_id': chat_id,
+                    'topic_id': {
+                        '@type': 'messageTopicForum',
+                        'forum_topic_id': 8 if message_id == 3 else 7,
+                    },
+                }
+
+            runtime.call = call
+            runtime._record_update(
+                {
+                    '@type': 'updateMessageReaction',
+                    'chat_id': 10,
+                    'message_id': 1,
+                }
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateMessageContent',
+                    'chat_id': 10,
+                    'message_id': 2,
+                    'new_content': {'@type': 'messageText'},
+                }
+            )
+            runtime._record_update(
+                {
+                    '@type': 'updateMessageContent',
+                    'chat_id': 10,
+                    'message_id': 3,
+                    'new_content': {'@type': 'messageText'},
+                }
+            )
+            await asyncio.sleep(0)
+            return await runtime.poll_updates(timeout=0.01, limit=2)
+
+        updates, _, timed_out, _ = asyncio.run(exercise())
+
+        self.assertEqual(
+            ['updateMessageReaction', 'updateMessageContent'],
+            [item['@type'] for item in updates],
+        )
+        self.assertEqual([1, 2], [item['message_id'] for item in updates])
         self.assertFalse(timed_out)
 
     def test_reaction_updates_require_an_explicit_event_subscription(self):
@@ -445,6 +541,38 @@ class RuntimeTestCase(TestCase):
         self.assertEqual(55, updates[0]['original_message']['id'])
         self.assertEqual(1, cursor)
         self.assertFalse(timed_out)
+
+    def test_transcription_results_respect_event_and_topic_filters(self):
+        async def poll_with_filters(event_types, topic_ids):
+            runtime = TelegramRuntime(SimpleNamespace())
+            await runtime.subscribe_for_updates(
+                frozenset({10}), event_types=event_types, topic_ids=topic_ids
+            )
+            runtime._transcription_requests[(10, 55)] = {
+                'id': 55,
+                'chat_id': 10,
+                'topic_id': {
+                    '@type': 'messageTopicForum',
+                    'forum_topic_id': 7,
+                },
+            }
+            runtime._record_transcription_result(
+                10, 55, {'status': 'completed', 'text': 'recognized'}
+            )
+            return await runtime.poll_updates(timeout=0.01, limit=1)
+
+        async def exercise():
+            return await asyncio.gather(
+                poll_with_filters({'updateMessageReaction'}, {7}),
+                poll_with_filters({'mcpMessageTranscription'}, {8}),
+            )
+
+        event_filtered, topic_filtered = asyncio.run(exercise())
+
+        self.assertEqual([], event_filtered[0])
+        self.assertTrue(event_filtered[2])
+        self.assertEqual([], topic_filtered[0])
+        self.assertTrue(topic_filtered[2])
 
     def test_unrequested_message_content_updates_are_ignored(self):
         async def exercise():

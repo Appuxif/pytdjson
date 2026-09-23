@@ -68,8 +68,17 @@ class ApiTestCase(TestCase):
             self.client.query,
         )
 
-        self.api.search_chats('Darina', limit=7, on_server=True)
-        self.assertEqual('searchPublicChats', self.client.query['@type'])
+        self.api.search_chats(
+            'Darina', limit=7, on_server=True, type_filter='chatTypeBasicGroup'
+        )
+        self.assertEqual(
+            {
+                '@type': 'searchPublicChats',
+                'query': 'Darina',
+                'type_filter': {'@type': 'chatTypeBasicGroup'},
+            },
+            self.client.query,
+        )
 
     def test_search_messages_builds_chat_and_global_requests(self):
         self.api.search_chat_messages(

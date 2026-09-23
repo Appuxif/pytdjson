@@ -680,6 +680,153 @@ class ServerTestCase(TestCase):
         )
         self.assertEqual(first_payload['messages'], second_payload['messages'])
 
+    def test_global_search_defaults_to_all_chat_lists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            asyncio.run(
+                create_server(settings, runtime).call_tool(
+                    'search_messages', {'query': 'archived match'}
+                )
+            )
+
+        search_call = next(
+            call for call in runtime.calls if call[0] == 'search_messages'
+        )
+        self.assertIsNone(search_call[2]['chat_list'])
+
+    def test_search_chats_limits_hydrated_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+
+            async def call(method, *args, **kwargs):
+                runtime.calls.append((method, args, kwargs))
+                if method == 'search_chats':
+                    return {'total_count': 3, 'chat_ids': [10, 20, 30]}
+                if method == 'get_chat':
+                    return {
+                        'id': args[0],
+                        'title': f'Chat {args[0]}',
+                        'type': {'@type': 'chatTypePrivate'},
+                    }
+                raise AssertionError(method)
+
+            runtime.call = call
+            result = asyncio.run(
+                create_server(settings, runtime).call_tool(
+                    'search_chats', {'query': 'group', 'limit': 2}
+                )
+            )
+
+        payload = json.loads(result.content[0].text)
+        fetched_chat_ids = [
+            args[0] for method, args, _ in runtime.calls if method == 'get_chat'
+        ]
+        self.assertEqual(3, payload['total_count'])
+        self.assertEqual([10, 20], fetched_chat_ids)
+
+    def test_complete_history_accounts_for_inclusive_page_boundary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            requests = []
+
+            async def call(method, *args, **kwargs):
+                self.assertEqual('get_chat_history', method)
+                requests.append(kwargs)
+                ids = range(200, 100, -1) if len(requests) == 1 else (101, 100)
+                return {
+                    'total_count': 500,
+                    'messages': [{'id': item_id, 'chat_id': 10} for item_id in ids],
+                }
+
+            runtime.call = call
+            result = asyncio.run(
+                create_server(settings, runtime).call_tool(
+                    'get_chat_history_complete',
+                    {
+                        'chat_id': 10,
+                        'limit': 101,
+                        'max_pages': 2,
+                        'include_sender_details': False,
+                    },
+                )
+            )
+
+        payload = json.loads(result.content[0].text)
+        self.assertEqual([100, 2], [item['limit'] for item in requests])
+        self.assertEqual([0, 101], [item['from_message_id'] for item in requests])
+        self.assertEqual(101, len(payload['messages']))
+        self.assertTrue(payload['complete'])
+
+    def test_complete_history_reports_stalled_boundary_as_incomplete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = load_settings(
+                environ={
+                    'PYTDJSON_API_ID': '42',
+                    'PYTDJSON_API_HASH': 'hash',
+                    'PYTDJSON_DATABASE_ENCRYPTION_KEY': 'key',
+                    'PYTDJSON_FILES_DIRECTORY': directory,
+                    'PYTDJSON_BOT_TOKEN': 'token',
+                }
+            )
+            runtime = RuntimeStub()
+            requests = []
+
+            async def call(method, *args, **kwargs):
+                self.assertEqual('get_chat_history', method)
+                requests.append(kwargs)
+                ids = (10, 9, 8) if len(requests) == 1 else (8,)
+                return {
+                    'total_count': 10,
+                    'messages': [{'id': item_id, 'chat_id': 10} for item_id in ids],
+                }
+
+            runtime.call = call
+            result = asyncio.run(
+                create_server(settings, runtime).call_tool(
+                    'get_chat_history_complete',
+                    {
+                        'chat_id': 10,
+                        'limit': 5,
+                        'max_pages': 3,
+                        'include_sender_details': False,
+                    },
+                )
+            )
+
+        payload = json.loads(result.content[0].text)
+        self.assertEqual([5, 3], [item['limit'] for item in requests])
+        self.assertEqual([0, 8], [item['from_message_id'] for item in requests])
+        self.assertEqual(3, len(payload['messages']))
+        self.assertFalse(payload['complete'])
+        self.assertFalse(payload['max_pages_reached'])
+
     def test_context_and_file_tools_return_compact_results(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = load_settings(

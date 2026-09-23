@@ -189,6 +189,82 @@ class ProjectionTestCase(TestCase):
         )
         self.assertEqual('next', added['next_offset'])
 
+    def test_reaction_update_events_preserve_changed_reaction_details(self):
+        interaction = projection.update(
+            {
+                '@type': 'updateMessageInteractionInfo',
+                'chat_id': 10,
+                'message_id': 20,
+                'interaction_info': {
+                    'view_count': 4,
+                    'reactions': {
+                        'reactions': [
+                            {
+                                'type': {
+                                    '@type': 'reactionTypeEmoji',
+                                    'emoji': '👍',
+                                },
+                                'total_count': 3,
+                                'is_chosen': True,
+                            }
+                        ]
+                    },
+                },
+            }
+        )
+        reaction = projection.update(
+            {
+                '@type': 'updateMessageReaction',
+                'chat_id': 10,
+                'message_id': 20,
+                'actor_id': {'@type': 'messageSenderUser', 'user_id': 30},
+                'old_reaction_types': [{'@type': 'reactionTypeEmoji', 'emoji': '👎'}],
+                'new_reaction_types': [{'@type': 'reactionTypeEmoji', 'emoji': '👍'}],
+            }
+        )
+
+        self.assertEqual(4, interaction['interaction_info']['view_count'])
+        self.assertEqual(
+            3, interaction['interaction_info']['reactions'][0]['total_count']
+        )
+        self.assertEqual(
+            {'type': 'messageSenderUser', 'user_id': 30}, reaction['actor_id']
+        )
+        self.assertEqual('👎', reaction['old_reaction_types'][0]['emoji'])
+        self.assertEqual('👍', reaction['new_reaction_types'][0]['emoji'])
+
+    def test_message_content_update_projects_replacement_text_and_media(self):
+        text_update = projection.update(
+            {
+                '@type': 'updateMessageContent',
+                'chat_id': 10,
+                'message_id': 20,
+                'new_content': {
+                    '@type': 'messageText',
+                    'text': {'text': 'replacement text'},
+                },
+            }
+        )
+        media_update = projection.update(
+            {
+                '@type': 'updateMessageContent',
+                'chat_id': 10,
+                'message_id': 20,
+                'new_content': {
+                    '@type': 'messageVideo',
+                    'video': {
+                        'duration': 6,
+                        'video': {'id': 91, 'size': 123},
+                    },
+                },
+            }
+        )
+
+        self.assertEqual('messageText', text_update['new_content']['content_type'])
+        self.assertEqual('replacement text', text_update['new_content']['text'])
+        self.assertEqual('messageVideo', media_update['new_content']['content_type'])
+        self.assertEqual(91, media_update['new_content']['media']['file']['id'])
+
     def test_message_transcription_update_keeps_original_message_metadata(self):
         result = projection.update(
             {
